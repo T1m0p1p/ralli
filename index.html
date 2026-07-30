@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="et">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+<meta name="theme-color" content="#000000" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Ralli Live</title>
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<main class="app-shell">
+  <section class="phone-app">
+    <header class="top-tabs" id="tabs"></header>
+    <div class="stage-head">
+      <button class="icon-button" id="prev" aria-label="Eelmine katse">‹</button>
+      <div><h1 id="stageTitle"></h1><p id="stageSub"></p></div>
+      <button class="icon-button" id="next" aria-label="Järgmine katse">›</button>
+    </div>
+    <section id="content"></section>
+    <footer class="refresh-bar"><button id="refresh">↻ Värskenda</button><span id="updated"></span></footer>
+  </section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
