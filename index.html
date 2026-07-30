@@ -6,26 +6,37 @@
 <meta name="theme-color" content="#000000" />
 <meta name="apple-mobile-web-app-capable" content="yes" />
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<title>Ralli Live</title>
-<link rel="stylesheet" href="styles.css" />
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+<title>Ralli Live v6</title>
+<link rel="stylesheet" href="styles-v6.css?v=6.0.0" />
 </head>
 <body>
 <main class="app-shell">
   <section class="phone-app">
-    <header class="top-tabs" id="tabs"></header>
+    <header class="top-tabs" id="tabs">
+      <button data-tab="KATSE">KATSE</button>
+      <button class="active" data-tab="SPLIT">SPLIT</button>
+      <button data-tab="ÜLDSEIS">ÜLDSEIS</button>
+      <button data-tab="SUPER SUNDAY">SUPER SUNDAY</button>
+    </header>
     <div class="stage-head">
       <button class="icon-button" id="prev" aria-label="Eelmine katse">‹</button>
-      <div><h1 id="stageTitle"></h1><p id="stageSub"></p></div>
+      <div><h1 id="stageTitle">Ralli Live</h1><p id="stageSub">Laen andmeid…</p></div>
       <button class="icon-button" id="next" aria-label="Järgmine katse">›</button>
     </div>
     <div class="filter-bar">
       <label for="category">Kategooria</label>
-      <select id="category" aria-label="Kategooria"></select>
+      <select id="category" aria-label="Kategooria">
+        <option value="KÕIK">KÕIK</option>
+        <option value="WRC">WRC</option>
+        <option value="WRC2">WRC2</option>
+        <option value="WRC3">WRC3</option>
+      </select>
     </div>
-    <section id="content"></section>
-    <footer class="refresh-bar"><button id="refresh">↻ Värskenda</button><span id="updated"></span></footer>
+    <section id="content"><p class="empty">Andmeid laaditakse…</p></section>
+    <footer class="refresh-bar"><button id="refresh">↻ Värskenda</button><span id="updated"></span><small class="version">v6</small></footer>
   </section>
 </main>
-<script src="app.js"></script>
+<script src="app-v6.js?v=6.0.0"></script>
 </body>
 </html>
