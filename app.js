@@ -1,39 +1,336 @@
-const API='https://api.wrc.com/results-api';
-const SEASON_URLS=[
-  'https://api.wrc.com/contel-page/83388/calendar/active-season/',
-  'https://api.wrc.com/content/filters/calendar?championship=wrc&origin=vcms'
-];
-const FALLBACK=[{id:'demo',title:'SS8 Mustla 1',distance:18.32,status:'Demo',splitKm:[5.46,11.12,16.34],drivers:[['tanak','Tänak',511.2,6135.6,[131.4,272.7,408.1]],['rovanpera','Rovanperä',511.9,6141.4,[131.1,272.9,408.5]],['evans','Evans',514.0,6153.8,[131.6,272.6,408.6]],['neuville','Neuville',515.3,6159.7,[132.0,273.5,409.3]]]}];
-const tabs=['KATSE','SPLIT','ÜLDSEIS'];
-let tab='SPLIT',stages=[],stageIndex=0,referenceId=null,eventId=null,eventName='',entries=new Map(),loading=false,autoTimer=null,dataMode='live';
-const $=s=>document.querySelector(s);
-const fmt=s=>{if(!Number.isFinite(s))return '—';const h=Math.floor(s/3600),m=Math.floor((s%3600)/60),sec=(s%60).toFixed(1).padStart(4,'0');return h?`${h}:${String(m).padStart(2,'0')}:${sec}`:`${m}:${sec}`};
-const delta=d=>!Number.isFinite(d)?'—':Math.abs(d)<.05?'0.0':`${d>0?'+':'−'}${Math.abs(d).toFixed(1)}`;
-const sec=v=>Number.isFinite(v)?v/1000:null;
-async function getJSON(url){const r=await fetch(url,{cache:'no-store',headers:{Accept:'application/json'}});if(!r.ok)throw new Error(`${r.status} ${url}`);return r.json()}
-function flattenEvents(x){if(Array.isArray(x))return x;if(Array.isArray(x?.rallyEvents?.items))return x.rallyEvents.items;if(Array.isArray(x?.items))return x.items;if(Array.isArray(x?.data))return x.data;return []}
-function eventDates(e){const raw=[e.startDate,e.dateStart,e.start,e?.eventDays?.[0]?.date,e?.pageInfo?.startDate].filter(Boolean);const end=[e.finishDate,e.dateEnd,e.end,e?.eventDays?.at?.(-1)?.date,e?.pageInfo?.endDate].filter(Boolean);return [raw[0]?new Date(raw[0]):null,end[0]?new Date(end[0]):null]}
-async function discoverEvent(){const manual=new URLSearchParams(location.search).get('event');if(manual)return {id:manual,name:`WRC ralli ${manual}`};let lastErr;for(const url of SEASON_URLS){try{const list=flattenEvents(await getJSON(url));if(!list.length)continue;const now=new Date();const active=list.find(e=>e.active===true||String(e.status).toLowerCase().includes('running'));
-const current=active||list.find(e=>{const [a,b]=eventDates(e);return a&&b&&now>=new Date(a.getTime()-86400000)&&now<=new Date(b.getTime()+86400000)});
-const upcoming=[...list].filter(e=>eventDates(e)[0]).sort((a,b)=>Math.abs(eventDates(a)[0]-now)-Math.abs(eventDates(b)[0]-now))[0];const pick=current||upcoming||list[0];return {id:pick.id||pick.eventId,name:pick.name||pick.title||'WRC'};}catch(e){lastErr=e}}
-throw lastErr||new Error('Rallit ei leitud')}
-function collectStages(itinerary){const legs=itinerary.itineraryLegs||itinerary.legs||[];return legs.flatMap(l=>(l.itinerarySections||l.sections||[]).flatMap(s=>(s.stages||[]))).filter(s=>String(s.stageType||'SpecialStage').toLowerCase().includes('special'))}
-function driverName(e){const d=e.driver||{};return d.lastName?`${d.lastName[0]}${d.lastName.slice(1).toLowerCase()}`:(d.abbvName||d.fullName||`Auto ${e.identifier||e.entryId}`)}
-async function loadBase(){const ev=await discoverEvent();eventId=ev.id;eventName=ev.name;const [it,cars]=await Promise.all([getJSON(`${API}/rally-event/${eventId}/itinerary`),getJSON(`${API}/rally-event/${eventId}/cars`)]);entries=new Map((Array.isArray(cars)?cars:cars.items||[]).map(e=>[String(e.entryId),{id:String(e.entryId),name:driverName(e),order:e.entryListOrder||999,group:e?.group?.name||'',priority:e.priority||''}]));const ss=collectStages(it).sort((a,b)=>(a.number||0)-(b.number||0));stages=ss.map(s=>({id:String(s.stageId),title:`${s.code||`SS${s.number}`} ${s.name||''}`.trim(),distance:Number(s.distance)||0,status:s.status||'',splitKm:[],drivers:[]}));if(!stages.length)throw new Error('Katseid ei leitud');const preferred=stages.findIndex(s=>/running|interrupted/i.test(s.status));const completed=[...stages].map((s,i)=>({s,i})).filter(x=>/completed/i.test(x.s.status)).at(-1)?.i;stageIndex=preferred>=0?preferred:(completed??0);referenceId=null}
-async function loadStage(index=stageIndex){const st=stages[index];const [times,splits,overall]=await Promise.allSettled([
-getJSON(`${API}/rally-event/${eventId}/stage-times/stage-external/${st.id}`),
-getJSON(`${API}/rally-event/${eventId}/split-times/stage-external/${st.id}`),
-getJSON(`${API}/rally-event/${eventId}/stage-result/stage-external/${st.id}`)]);
-const t=times.status==='fulfilled'?(Array.isArray(times.value)?times.value:times.value.items||[]):[];const sp=splits.status==='fulfilled'?splits.value:{};const ov=overall.status==='fulfilled'?(Array.isArray(overall.value)?overall.value:overall.value.items||[]):[];
-const points=[...(sp.splitPoints||[])].sort((a,b)=>(a.number||a.distance)-(b.number||b.distance));st.splitKm=points.map(p=>Number(p.distance)||0);const splitByEntry=new Map();for(const row of sp.entrySplitPointTimes||[]){const map=new Map((row.splitPointTimes||[]).map(x=>[String(x.splitPointId),sec(x.elapsedDurationMs)]));splitByEntry.set(String(row.entryId),points.map(p=>map.get(String(p.splitPointId))??null))}
-const stageByEntry=new Map(t.map(x=>[String(x.entryId),sec(x.elapsedDurationMs)]));const overallByEntry=new Map(ov.map(x=>[String(x.entryId),sec(x.totalTimeMs)]));const ids=new Set([...stageByEntry.keys(),...splitByEntry.keys(),...overallByEntry.keys()]);st.drivers=[...ids].map(id=>{const e=entries.get(id)||{id,name:`#${id}`,order:999};return [id,e.name,stageByEntry.get(id),overallByEntry.get(id),splitByEntry.get(id)||points.map(()=>null),e.order]}).sort((a,b)=>{const aa=Number.isFinite(a[2])?a[2]:Infinity,bb=Number.isFinite(b[2])?b[2]:Infinity;return aa-bb||a[5]-b[5]});if(!referenceId||!st.drivers.some(d=>d[0]===referenceId))referenceId=st.drivers[0]?.[0]||null}
-async function refresh(all=false){if(loading)return;loading=true;setStatus('Laen…','loading');try{if(all||!stages.length)await loadBase();await loadStage();dataMode='live';setStatus(`LIVE · ${new Date().toLocaleTimeString('et-EE',{hour:'2-digit',minute:'2-digit',second:'2-digit'})}`,'live')}catch(e){console.error(e);if(!stages.length){stages=FALLBACK;stageIndex=0;referenceId=FALLBACK[0].drivers[0][0]}dataMode='demo';setStatus(`NÄIDISANDMED · live-päring ebaõnnestus`,'error')}finally{loading=false;render()}}
-function setStatus(text,cls=''){$('#updated').textContent=text;$('#updated').className=cls}
-function render(){const stage=stages[stageIndex];if(!stage)return;const ref=stage.drivers.find(d=>d[0]===referenceId)||stage.drivers[0];$('#tabs').innerHTML=tabs.map(t=>`<button class="${t===tab?'active':''}" data-tab="${t}">${t}</button>`).join('');document.querySelectorAll('[data-tab]').forEach(b=>b.onclick=()=>{tab=b.dataset.tab;render()});$('#stageTitle').textContent=stage.title;$('#stageSub').innerHTML=tab==='KATSE'?`${stage.distance.toFixed(2)} km · ${stage.status||eventName}`:tab==='SPLIT'&&ref?`Võrdlus: <strong>${ref[1].toUpperCase()}</strong>`:eventName;
-if(tab==='KATSE'){const sorted=[...stage.drivers].filter(d=>Number.isFinite(d[2])).sort((a,b)=>a[2]-b[2]),lead=sorted[0]?.[2];$('#content').innerHTML=`<section class="list-view">${/running/i.test(stage.status)?'<div class="live-label">LIVE</div>':''}${sorted.length?sorted.map((d,i)=>`<button class="result-row" data-driver="${d[0]}"><span class="pos">${i+1}</span><span class="driver">${d[1]}</span><span class="time">${i?delta(d[2]-lead):fmt(d[2])}</span></button>`).join(''):'<p class="empty">Katseaegu veel ei ole.</p>'}</section>`}
-else if(tab==='SPLIT'){if(!ref){$('#content').innerHTML='<p class="empty">Splite veel ei ole.</p>'}else{const cols=stage.splitKm.length+2;let html=`<section class="split-wrap"><div class="split-table" style="grid-template-columns:minmax(112px,1.25fr) repeat(${cols-1},minmax(62px,.8fr))"><div></div>${stage.splitKm.map((k,i)=>`<div class="split-header"><span>S${i+1}</span><small>${k.toFixed(2)} km</small></div>`).join('')}<div class="split-header"><span>FIN</span></div>`;stage.drivers.forEach((d,i)=>{const is=d[0]===ref[0];html+=`<button class="driver-cell ${is?'selected':''}" data-driver="${d[0]}"><span>${i+1}</span><strong>${d[1]}</strong></button>`;d[4].forEach((s,j)=>{const x=Number.isFinite(s)&&Number.isFinite(ref[4][j])?s-ref[4][j]:null,c=is?'reference':!Number.isFinite(x)?'neutral':x<-.05?'gain':x>.05?'loss':'neutral';html+=`<div class="split-cell ${c}">${is?fmt(s):delta(x)}</div>`});const x=Number.isFinite(d[2])&&Number.isFinite(ref[2])?d[2]-ref[2]:null,c=is?'reference':!Number.isFinite(x)?'neutral':x<-.05?'gain':x>.05?'loss':'neutral';html+=`<div class="split-cell ${c}">${is?fmt(d[2]):delta(x)}</div>`});html+=`</div><p class="hint">Puuduta sõitjat, et võrrelda temaga</p></section>`;$('#content').innerHTML=html}}
-else{const sorted=[...stage.drivers].filter(d=>Number.isFinite(d[3])).sort((a,b)=>a[3]-b[3]),lead=sorted[0]?.[3];$('#content').innerHTML=`<section class="overall-view"><div class="overall-head"><span></span><span>AEG</span><span>VAHE</span></div>${sorted.length?sorted.map((d,i)=>`<button class="overall-row" data-driver="${d[0]}"><span class="pos">${i+1}</span><span class="driver">${d[1]}</span><span class="time">${fmt(d[3])}</span><span class="gap">${i?delta(d[3]-lead):''}</span></button>`).join(''):'<p class="empty">Üldseisu veel ei ole.</p>'}</section>`}
-document.querySelectorAll('[data-driver]').forEach(b=>b.onclick=()=>{referenceId=b.dataset.driver;tab='SPLIT';render()});}
-async function change(n){stageIndex=(stageIndex+n+stages.length)%stages.length;referenceId=null;render();await refresh(false)}
-$('#prev').onclick=()=>change(-1);$('#next').onclick=()=>change(1);$('#refresh').onclick=()=>refresh(false);
-refresh(true);autoTimer=setInterval(()=>refresh(false),15000);document.addEventListener('visibilitychange',()=>{if(!document.hidden)refresh(false)});
+const API_ROOT = 'https://p-p.redbull.com/rb-wrccom-lintegration-yv-prod/api';
+
+// Secto Rally Finland 2026. Neid saab URL-ist üle kirjutada:
+// ?event=644&rally=712&itinerary=1461
+const DEFAULT_CONFIG = {
+  eventId: '644',
+  rallyId: '712',
+  itineraryId: '1461',
+  eventName: 'Secto Rally Finland 2026'
+};
+
+const params = new URLSearchParams(location.search);
+const config = {
+  eventId: params.get('event') || DEFAULT_CONFIG.eventId,
+  rallyId: params.get('rally') || DEFAULT_CONFIG.rallyId,
+  itineraryId: params.get('itinerary') || DEFAULT_CONFIG.itineraryId,
+  eventName: params.get('name') || DEFAULT_CONFIG.eventName
+};
+
+const tabs = ['KATSE', 'SPLIT', 'ÜLDSEIS'];
+let tab = 'SPLIT';
+let stages = [];
+let stageIndex = 0;
+let entries = new Map();
+let referenceId = null;
+let loading = false;
+
+const $ = selector => document.querySelector(selector);
+
+function formatTimeMs(ms) {
+  if (!Number.isFinite(ms)) return '—';
+  const totalSeconds = ms / 1000;
+  const hours = Math.floor(totalSeconds / 3600);
+  const minutes = Math.floor((totalSeconds % 3600) / 60);
+  const seconds = (totalSeconds % 60).toFixed(1).padStart(4, '0');
+  return hours
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}`
+    : `${minutes}:${seconds}`;
+}
+
+function formatDeltaMs(ms) {
+  if (!Number.isFinite(ms)) return '—';
+  if (Math.abs(ms) < 50) return '0.0';
+  return `${ms > 0 ? '+' : '−'}${Math.abs(ms / 1000).toFixed(1)}`;
+}
+
+function deltaClass(ms) {
+  if (!Number.isFinite(ms) || Math.abs(ms) < 50) return 'neutral';
+  return ms < 0 ? 'gain' : 'loss';
+}
+
+async function getJSON(url) {
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: { Accept: 'application/json' }
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
+  return response.json();
+}
+
+function api(path) {
+  return `${API_ROOT}/events/${config.eventId}${path}`;
+}
+
+function driverName(entry) {
+  const driver = entry?.driver || {};
+  if (driver.lastName) {
+    return driver.lastName.charAt(0).toUpperCase() + driver.lastName.slice(1).toLowerCase();
+  }
+  return driver.abbvName || driver.fullName || `#${entry?.identifier || entry?.entryId}`;
+}
+
+function stageStartTime(stage) {
+  const start = (stage.controls || []).find(control => control.type === 'StageStart');
+  return start?.firstCarDueDateTimeLocal || start?.firstCarDueDateTime || null;
+}
+
+function pickInitialStageIndex() {
+  const running = stages.findIndex(stage => /running|inprogress/i.test(stage.status));
+  if (running >= 0) return running;
+
+  const now = Date.now();
+  const next = stages.findIndex(stage => {
+    const start = stageStartTime(stage);
+    return start && new Date(start).getTime() >= now - 15 * 60 * 1000;
+  });
+  if (next >= 0) return Math.max(0, next - 1);
+
+  const completed = stages
+    .map((stage, index) => ({ stage, index }))
+    .filter(item => /completed/i.test(item.stage.status))
+    .at(-1);
+  return completed?.index ?? 0;
+}
+
+async function loadBaseData() {
+  const [stageList, entryList] = await Promise.all([
+    getJSON(api('/stages.json')),
+    getJSON(api(`/rallies/${config.rallyId}/entries.json`))
+  ]);
+
+  entries = new Map((Array.isArray(entryList) ? entryList : []).map(entry => [
+    String(entry.entryId),
+    {
+      id: String(entry.entryId),
+      name: driverName(entry),
+      order: entry.entryListOrder ?? 999,
+      number: entry.identifier || '',
+      priority: entry.priority || ''
+    }
+  ]));
+
+  stages = (Array.isArray(stageList) ? stageList : [])
+    .filter(stage => stage.stageId && stage.code)
+    .sort((a, b) => (a.number || 0) - (b.number || 0))
+    .map(stage => ({
+      ...stage,
+      id: String(stage.stageId),
+      title: `${stage.code} ${stage.name}`,
+      splitPoints: [...(stage.splitPoints || [])].sort((a, b) => (a.number || 0) - (b.number || 0)),
+      drivers: []
+    }));
+
+  if (!stages.length) throw new Error('Katseid ei leitud.');
+  stageIndex = pickInitialStageIndex();
+  referenceId = null;
+}
+
+async function loadCurrentStage() {
+  const stage = stages[stageIndex];
+  if (!stage) return;
+
+  const base = api(`/stages/${stage.id}`);
+  const query = `?rallyId=${encodeURIComponent(config.rallyId)}`;
+  const [stageTimesResult, splitTimesResult, resultsResult] = await Promise.allSettled([
+    getJSON(`${base}/stagetimes.json${query}`),
+    getJSON(`${base}/splittimes.json${query}`),
+    getJSON(`${base}/results.json${query}`)
+  ]);
+
+  const stageTimes = stageTimesResult.status === 'fulfilled' && Array.isArray(stageTimesResult.value)
+    ? stageTimesResult.value : [];
+  const splitTimes = splitTimesResult.status === 'fulfilled' && Array.isArray(splitTimesResult.value)
+    ? splitTimesResult.value : [];
+  const results = resultsResult.status === 'fulfilled' && Array.isArray(resultsResult.value)
+    ? resultsResult.value : [];
+
+  const stageByEntry = new Map(stageTimes.map(row => [String(row.entryId), row.elapsedDurationMs]));
+  const overallByEntry = new Map(results.map(row => [String(row.entryId), row.totalTimeMs]));
+  const resultPosition = new Map(results.map(row => [String(row.entryId), row.position]));
+
+  const splitMaps = new Map();
+  for (const row of splitTimes) {
+    const entryId = String(row.entryId);
+    if (!splitMaps.has(entryId)) splitMaps.set(entryId, new Map());
+    splitMaps.get(entryId).set(String(row.splitPointId), row.elapsedDurationMs);
+  }
+
+  const ids = new Set([
+    ...stageByEntry.keys(),
+    ...overallByEntry.keys(),
+    ...splitMaps.keys()
+  ]);
+
+  stage.drivers = [...ids].map(id => {
+    const entry = entries.get(id) || { id, name: `#${id}`, order: 999 };
+    return {
+      ...entry,
+      stageTimeMs: stageByEntry.get(id),
+      overallTimeMs: overallByEntry.get(id),
+      overallPosition: resultPosition.get(id),
+      splits: stage.splitPoints.map(point => splitMaps.get(id)?.get(String(point.splitPointId)))
+    };
+  }).sort((a, b) => {
+    const aTime = Number.isFinite(a.stageTimeMs) ? a.stageTimeMs : Infinity;
+    const bTime = Number.isFinite(b.stageTimeMs) ? b.stageTimeMs : Infinity;
+    return aTime - bTime || a.order - b.order;
+  });
+
+  if (!referenceId || !stage.drivers.some(driver => driver.id === referenceId)) {
+    referenceId = stage.drivers[0]?.id || null;
+  }
+}
+
+function setStatus(text, className = '') {
+  $('#updated').textContent = text;
+  $('#updated').className = className;
+}
+
+async function refresh(reloadBase = false) {
+  if (loading) return;
+  loading = true;
+  setStatus('Laen…', 'loading');
+  try {
+    if (reloadBase || !stages.length) await loadBaseData();
+    await loadCurrentStage();
+    setStatus(`LIVE · ${new Date().toLocaleTimeString('et-EE', {
+      hour: '2-digit', minute: '2-digit', second: '2-digit'
+    })}`, 'live');
+  } catch (error) {
+    console.error(error);
+    setStatus(`VIGA · ${error.message}`, 'error');
+  } finally {
+    loading = false;
+    render();
+  }
+}
+
+function renderTabs() {
+  $('#tabs').innerHTML = tabs.map(name =>
+    `<button class="${name === tab ? 'active' : ''}" data-tab="${name}">${name}</button>`
+  ).join('');
+  document.querySelectorAll('[data-tab]').forEach(button => {
+    button.onclick = () => {
+      tab = button.dataset.tab;
+      render();
+    };
+  });
+}
+
+function renderStageView(stage) {
+  const drivers = stage.drivers
+    .filter(driver => Number.isFinite(driver.stageTimeMs))
+    .sort((a, b) => a.stageTimeMs - b.stageTimeMs);
+  const leader = drivers[0]?.stageTimeMs;
+  $('#content').innerHTML = `
+    <section class="list-view">
+      ${/running|inprogress/i.test(stage.status) ? '<div class="live-label">LIVE</div>' : ''}
+      ${drivers.length ? drivers.map((driver, index) => `
+        <button class="result-row" data-driver="${driver.id}">
+          <span class="pos">${index + 1}</span>
+          <span class="driver">${driver.name}</span>
+          <span class="time">${index === 0 ? formatTimeMs(driver.stageTimeMs) : formatDeltaMs(driver.stageTimeMs - leader)}</span>
+        </button>`).join('') : '<p class="empty">Katseaegu veel ei ole.</p>'}
+    </section>`;
+}
+
+function renderSplitView(stage) {
+  const reference = stage.drivers.find(driver => driver.id === referenceId) || stage.drivers[0];
+  if (!reference) {
+    $('#content').innerHTML = '<p class="empty">Splitiaegu veel ei ole.</p>';
+    return;
+  }
+
+  const columns = stage.splitPoints.length + 2;
+  let html = `<section class="split-wrap"><div class="split-table" style="grid-template-columns:minmax(112px,1.25fr) repeat(${columns - 1},minmax(62px,.8fr))"><div></div>`;
+  html += stage.splitPoints.map((point, index) => `
+    <div class="split-header"><span>S${index + 1}</span><small>${Number(point.distance || 0).toFixed(2)} km</small></div>`).join('');
+  html += '<div class="split-header"><span>FIN</span></div>';
+
+  stage.drivers.forEach((driver, index) => {
+    const selected = driver.id === reference.id;
+    html += `<button class="driver-cell ${selected ? 'selected' : ''}" data-driver="${driver.id}"><span>${index + 1}</span><strong>${driver.name}</strong></button>`;
+
+    driver.splits.forEach((splitMs, splitIndex) => {
+      const referenceMs = reference.splits[splitIndex];
+      const difference = Number.isFinite(splitMs) && Number.isFinite(referenceMs) ? splitMs - referenceMs : null;
+      html += `<div class="split-cell ${selected ? 'reference' : deltaClass(difference)}">${selected ? formatTimeMs(splitMs) : formatDeltaMs(difference)}</div>`;
+    });
+
+    const finishDifference = Number.isFinite(driver.stageTimeMs) && Number.isFinite(reference.stageTimeMs)
+      ? driver.stageTimeMs - reference.stageTimeMs : null;
+    html += `<div class="split-cell ${selected ? 'reference' : deltaClass(finishDifference)}">${selected ? formatTimeMs(driver.stageTimeMs) : formatDeltaMs(finishDifference)}</div>`;
+  });
+
+  html += '</div><p class="hint">Puuduta sõitjat, et võrrelda temaga</p></section>';
+  $('#content').innerHTML = html;
+}
+
+function renderOverallView(stage) {
+  const drivers = stage.drivers
+    .filter(driver => Number.isFinite(driver.overallTimeMs))
+    .sort((a, b) => (a.overallPosition || 999) - (b.overallPosition || 999) || a.overallTimeMs - b.overallTimeMs);
+  const leader = drivers[0]?.overallTimeMs;
+  $('#content').innerHTML = `
+    <section class="overall-view">
+      <div class="overall-head"><span></span><span>AEG</span><span>VAHE</span></div>
+      ${drivers.length ? drivers.map((driver, index) => `
+        <button class="overall-row" data-driver="${driver.id}">
+          <span class="pos">${driver.overallPosition || index + 1}</span>
+          <span class="driver">${driver.name}</span>
+          <span class="time">${formatTimeMs(driver.overallTimeMs)}</span>
+          <span class="gap">${index ? formatDeltaMs(driver.overallTimeMs - leader) : ''}</span>
+        </button>`).join('') : '<p class="empty">Üldseisu veel ei ole.</p>'}
+    </section>`;
+}
+
+function render() {
+  renderTabs();
+  const stage = stages[stageIndex];
+  if (!stage) {
+    $('#stageTitle').textContent = 'Ralli Live';
+    $('#stageSub').textContent = config.eventName;
+    $('#content').innerHTML = '<p class="empty">Andmeid laaditakse…</p>';
+    return;
+  }
+
+  const reference = stage.drivers.find(driver => driver.id === referenceId) || stage.drivers[0];
+  $('#stageTitle').textContent = stage.title;
+  $('#stageSub').innerHTML = tab === 'KATSE'
+    ? `${Number(stage.distance || 0).toFixed(2)} km · ${stage.status || ''}`
+    : tab === 'SPLIT' && reference
+      ? `Võrdlus: <strong>${reference.name.toUpperCase()}</strong>`
+      : config.eventName;
+
+  if (tab === 'KATSE') renderStageView(stage);
+  else if (tab === 'SPLIT') renderSplitView(stage);
+  else renderOverallView(stage);
+
+  document.querySelectorAll('[data-driver]').forEach(button => {
+    button.onclick = () => {
+      referenceId = button.dataset.driver;
+      tab = 'SPLIT';
+      render();
+    };
+  });
+}
+
+async function changeStage(direction) {
+  if (!stages.length) return;
+  stageIndex = (stageIndex + direction + stages.length) % stages.length;
+  referenceId = null;
+  render();
+  await refresh(false);
+}
+
+$('#prev').onclick = () => changeStage(-1);
+$('#next').onclick = () => changeStage(1);
+$('#refresh').onclick = () => refresh(false);
+
+render();
+refresh(true);
+setInterval(() => refresh(false), 10000);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) refresh(false);
+});
