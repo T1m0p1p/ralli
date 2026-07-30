@@ -26,6 +26,7 @@ Ralli saab vajadusel käsitsi määrata URL-is:
 
 `https://kasutaja.github.io/repo/?event=EVENT_ID`
 
+
 ## Piirang
 
 WRC API ei ole ametlikult avalik arendaja-API. Kui WRC muudab endpoint'e või brauseri CORS-reegleid, kuvatakse automaatselt näidisandmed ja prototüübi päringukihti tuleb uuendada.
