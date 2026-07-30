@@ -1,40 +1,23 @@
-# Ralli Live – WRC live-andmetega prototüüp
+# Ralli Live v3
 
-Staatiline GitHub Pagesi rakendus. Buildi ega oma serverit pole vaja.
+Staatiline GitHub Pagesi prototüüp, mis kuvab WRC live-andmeid otse WRC tulemuste JSON-endpointidest.
 
-## Paigaldamine olemasolevasse reposse
+## Uus v3-s
 
-Laadi repo juurkausta ja asenda järgmised failid:
+- ühtlane väiksem tekst kõigis vaadetes;
+- tihedamad read;
+- kategooriafilter: WRC, WRC2, WRC3 ja muud API-s leiduvad klassid;
+- eraldi **Super Sunday** vahekaart;
+- Super Sunday tabel arvutatakse viimase itinerary päeva katseaegade summana;
+- valitud kategooria jääb brauseris meelde.
 
-- `index.html`
-- `styles.css`
-- `app.js`
-- `README.md`
+## GitHub Pages
 
-Commiti muudatused `main` branchi. GitHub Pages avaldab uue versiooni automaatselt.
+Laadi kõik failid repo juurkausta ja kasuta:
 
-## Andmeallikas
+- Branch: `main`
+- Folder: `/(root)`
 
-Rakendus kasutab WRC veebilehe praeguseid JSON-andmeid Red Bulli CDN-ist:
+Vaikimisi on seadistatud Secto Rally Finland 2026. Teise ralli jaoks saab ID-d URL-is üle kirjutada:
 
-- `stages.json`
-- `entries.json`
-- `stagetimes.json`
-- `splittimes.json`
-- `results.json`
-
-Vaikimisi on seadistatud Secto Rally Finland 2026:
-
-- event ID: `644`
-- rally ID: `712`
-- itinerary ID: `1461`
-
-## Teise ralli testimine
-
-ID-d saab URL-is üle kirjutada:
-
-```text
-https://kasutaja.github.io/ralli/?event=644&rally=712&itinerary=1461
-```
-
-Rakendus värskendab aktiivse katse andmeid iga 10 sekundi järel.
+`?event=644&rally=712&itinerary=1461&name=Secto%20Rally%20Finland%202026`

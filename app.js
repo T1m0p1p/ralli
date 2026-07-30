@@ -1,7 +1,5 @@
 const API_ROOT = 'https://p-p.redbull.com/rb-wrccom-lintegration-yv-prod/api';
 
-// Secto Rally Finland 2026. Neid saab URL-ist üle kirjutada:
-// ?event=644&rally=712&itinerary=1461
 const DEFAULT_CONFIG = {
   eventId: '644',
   rallyId: '712',
@@ -17,12 +15,16 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
-const tabs = ['KATSE', 'SPLIT', 'ÜLDSEIS'];
+const tabs = ['KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY'];
+const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3', 'RC4'];
 let tab = 'SPLIT';
 let stages = [];
+let sundayStageIds = [];
+let sundayResults = [];
 let stageIndex = 0;
 let entries = new Map();
 let referenceId = null;
+let category = localStorage.getItem('ralli-category') || 'KÕIK';
 let loading = false;
 
 const $ = selector => document.querySelector(selector);
@@ -70,6 +72,16 @@ function driverName(entry) {
   return driver.abbvName || driver.fullName || `#${entry?.identifier || entry?.entryId}`;
 }
 
+function categoryName(entry) {
+  const group = entry?.group?.name || '';
+  const eventClass = entry?.eventClasses?.[0]?.name || '';
+  if (/rally1/i.test(group) || eventClass === 'RC1') return 'WRC';
+  if (/rally2/i.test(group) || eventClass === 'RC2') return 'WRC2';
+  if (/rally3/i.test(group) || eventClass === 'RC3') return 'WRC3';
+  if (eventClass) return eventClass.toUpperCase();
+  return group.toUpperCase() || 'MUU';
+}
+
 function stageStartTime(stage) {
   const start = (stage.controls || []).find(control => control.type === 'StageStart');
   return start?.firstCarDueDateTimeLocal || start?.firstCarDueDateTime || null;
@@ -93,10 +105,21 @@ function pickInitialStageIndex() {
   return completed?.index ?? 0;
 }
 
+function availableCategories() {
+  const found = new Set([...entries.values()].map(entry => entry.category));
+  return categoryOrder.filter(item => item === 'KÕIK' || found.has(item))
+    .concat([...found].filter(item => !categoryOrder.includes(item)).sort());
+}
+
+function filteredDrivers(drivers) {
+  return category === 'KÕIK' ? drivers : drivers.filter(driver => driver.category === category);
+}
+
 async function loadBaseData() {
-  const [stageList, entryList] = await Promise.all([
+  const [stageList, entryList, itinerary] = await Promise.all([
     getJSON(api('/stages.json')),
-    getJSON(api(`/rallies/${config.rallyId}/entries.json`))
+    getJSON(api(`/rallies/${config.rallyId}/entries.json`)),
+    getJSON(api(`/itineraries/${config.itineraryId}.json`))
   ]);
 
   entries = new Map((Array.isArray(entryList) ? entryList : []).map(entry => [
@@ -106,7 +129,8 @@ async function loadBaseData() {
       name: driverName(entry),
       order: entry.entryListOrder ?? 999,
       number: entry.identifier || '',
-      priority: entry.priority || ''
+      priority: entry.priority || '',
+      category: categoryName(entry)
     }
   ]));
 
@@ -121,9 +145,16 @@ async function loadBaseData() {
       drivers: []
     }));
 
+  const legs = itinerary?.itineraryLegs || [];
+  const finalLeg = [...legs].sort((a, b) => (a.order || 0) - (b.order || 0)).at(-1);
+  sundayStageIds = (finalLeg?.itinerarySections || [])
+    .flatMap(section => section.stages || [])
+    .map(stage => String(stage.stageId));
+
   if (!stages.length) throw new Error('Katseid ei leitud.');
   stageIndex = pickInitialStageIndex();
   referenceId = null;
+  renderCategorySelect();
 }
 
 async function loadCurrentStage() {
@@ -156,14 +187,9 @@ async function loadCurrentStage() {
     splitMaps.get(entryId).set(String(row.splitPointId), row.elapsedDurationMs);
   }
 
-  const ids = new Set([
-    ...stageByEntry.keys(),
-    ...overallByEntry.keys(),
-    ...splitMaps.keys()
-  ]);
-
+  const ids = new Set([...stageByEntry.keys(), ...overallByEntry.keys(), ...splitMaps.keys()]);
   stage.drivers = [...ids].map(id => {
-    const entry = entries.get(id) || { id, name: `#${id}`, order: 999 };
+    const entry = entries.get(id) || { id, name: `#${id}`, order: 999, category: 'MUU' };
     return {
       ...entry,
       stageTimeMs: stageByEntry.get(id),
@@ -177,9 +203,40 @@ async function loadCurrentStage() {
     return aTime - bTime || a.order - b.order;
   });
 
-  if (!referenceId || !stage.drivers.some(driver => driver.id === referenceId)) {
-    referenceId = stage.drivers[0]?.id || null;
+  const visible = filteredDrivers(stage.drivers);
+  if (!referenceId || !visible.some(driver => driver.id === referenceId)) {
+    referenceId = visible[0]?.id || null;
   }
+}
+
+async function loadSundayResults() {
+  if (!sundayStageIds.length) {
+    sundayResults = [];
+    return;
+  }
+
+  const query = `?rallyId=${encodeURIComponent(config.rallyId)}`;
+  const responses = await Promise.allSettled(sundayStageIds.map(stageId =>
+    getJSON(api(`/stages/${stageId}/stagetimes.json${query}`))
+  ));
+
+  const totals = new Map();
+  for (const response of responses) {
+    if (response.status !== 'fulfilled' || !Array.isArray(response.value)) continue;
+    for (const row of response.value) {
+      if (!Number.isFinite(row.elapsedDurationMs)) continue;
+      const id = String(row.entryId);
+      const current = totals.get(id) || { totalTimeMs: 0, completedStages: 0 };
+      current.totalTimeMs += row.elapsedDurationMs;
+      current.completedStages += 1;
+      totals.set(id, current);
+    }
+  }
+
+  sundayResults = [...totals.entries()].map(([id, result]) => ({
+    ...(entries.get(id) || { id, name: `#${id}`, order: 999, category: 'MUU' }),
+    ...result
+  })).sort((a, b) => b.completedStages - a.completedStages || a.totalTimeMs - b.totalTimeMs || a.order - b.order);
 }
 
 function setStatus(text, className = '') {
@@ -193,7 +250,7 @@ async function refresh(reloadBase = false) {
   setStatus('Laen…', 'loading');
   try {
     if (reloadBase || !stages.length) await loadBaseData();
-    await loadCurrentStage();
+    await Promise.all([loadCurrentStage(), loadSundayResults()]);
     setStatus(`LIVE · ${new Date().toLocaleTimeString('et-EE', {
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     })}`, 'live');
@@ -204,6 +261,13 @@ async function refresh(reloadBase = false) {
     loading = false;
     render();
   }
+}
+
+function renderCategorySelect() {
+  const select = $('#category');
+  const categories = availableCategories();
+  if (!categories.includes(category)) category = 'KÕIK';
+  select.innerHTML = categories.map(item => `<option value="${item}" ${item === category ? 'selected' : ''}>${item}</option>`).join('');
 }
 
 function renderTabs() {
@@ -219,7 +283,7 @@ function renderTabs() {
 }
 
 function renderStageView(stage) {
-  const drivers = stage.drivers
+  const drivers = filteredDrivers(stage.drivers)
     .filter(driver => Number.isFinite(driver.stageTimeMs))
     .sort((a, b) => a.stageTimeMs - b.stageTimeMs);
   const leader = drivers[0]?.stageTimeMs;
@@ -231,24 +295,25 @@ function renderStageView(stage) {
           <span class="pos">${index + 1}</span>
           <span class="driver">${driver.name}</span>
           <span class="time">${index === 0 ? formatTimeMs(driver.stageTimeMs) : formatDeltaMs(driver.stageTimeMs - leader)}</span>
-        </button>`).join('') : '<p class="empty">Katseaegu veel ei ole.</p>'}
+        </button>`).join('') : '<p class="empty">Selles kategoorias katseaegu veel ei ole.</p>'}
     </section>`;
 }
 
 function renderSplitView(stage) {
-  const reference = stage.drivers.find(driver => driver.id === referenceId) || stage.drivers[0];
+  const drivers = filteredDrivers(stage.drivers);
+  const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
   if (!reference) {
-    $('#content').innerHTML = '<p class="empty">Splitiaegu veel ei ole.</p>';
+    $('#content').innerHTML = '<p class="empty">Selles kategoorias splitiaegu veel ei ole.</p>';
     return;
   }
 
   const columns = stage.splitPoints.length + 2;
-  let html = `<section class="split-wrap"><div class="split-table" style="grid-template-columns:minmax(112px,1.25fr) repeat(${columns - 1},minmax(62px,.8fr))"><div></div>`;
+  let html = `<section class="split-wrap"><div class="split-table" style="grid-template-columns:minmax(100px,1.25fr) repeat(${columns - 1},minmax(56px,.8fr))"><div></div>`;
   html += stage.splitPoints.map((point, index) => `
     <div class="split-header"><span>S${index + 1}</span><small>${Number(point.distance || 0).toFixed(2)} km</small></div>`).join('');
   html += '<div class="split-header"><span>FIN</span></div>';
 
-  stage.drivers.forEach((driver, index) => {
+  drivers.forEach((driver, index) => {
     const selected = driver.id === reference.id;
     html += `<button class="driver-cell ${selected ? 'selected' : ''}" data-driver="${driver.id}"><span>${index + 1}</span><strong>${driver.name}</strong></button>`;
 
@@ -268,26 +333,51 @@ function renderSplitView(stage) {
 }
 
 function renderOverallView(stage) {
-  const drivers = stage.drivers
+  const drivers = filteredDrivers(stage.drivers)
     .filter(driver => Number.isFinite(driver.overallTimeMs))
-    .sort((a, b) => (a.overallPosition || 999) - (b.overallPosition || 999) || a.overallTimeMs - b.overallTimeMs);
+    .sort((a, b) => a.overallTimeMs - b.overallTimeMs);
   const leader = drivers[0]?.overallTimeMs;
   $('#content').innerHTML = `
     <section class="overall-view">
       <div class="overall-head"><span></span><span>AEG</span><span>VAHE</span></div>
       ${drivers.length ? drivers.map((driver, index) => `
         <button class="overall-row" data-driver="${driver.id}">
-          <span class="pos">${driver.overallPosition || index + 1}</span>
+          <span class="pos">${index + 1}</span>
           <span class="driver">${driver.name}</span>
           <span class="time">${formatTimeMs(driver.overallTimeMs)}</span>
           <span class="gap">${index ? formatDeltaMs(driver.overallTimeMs - leader) : ''}</span>
-        </button>`).join('') : '<p class="empty">Üldseisu veel ei ole.</p>'}
+        </button>`).join('') : '<p class="empty">Selles kategoorias üldseisu veel ei ole.</p>'}
+    </section>`;
+}
+
+function renderSundayView() {
+  const drivers = filteredDrivers(sundayResults);
+  const maxCompleted = Math.max(0, ...drivers.map(driver => driver.completedStages));
+  const classified = drivers.filter(driver => driver.completedStages === maxCompleted && maxCompleted > 0)
+    .sort((a, b) => a.totalTimeMs - b.totalTimeMs);
+  const leader = classified[0]?.totalTimeMs;
+  $('#content').innerHTML = `
+    <section class="sunday-view">
+      <p class="sunday-note">Viimase võistluspäeva katsete summa · ${maxCompleted}/${sundayStageIds.length} katset</p>
+      <div class="sunday-head"><span></span><span>AEG</span><span>VAHE</span></div>
+      ${classified.length ? classified.map((driver, index) => `
+        <button class="sunday-row" data-driver="${driver.id}">
+          <span class="pos">${index + 1}</span>
+          <span class="driver">${driver.name}</span>
+          <span class="time">${formatTimeMs(driver.totalTimeMs)}</span>
+          <span class="gap">${index ? formatDeltaMs(driver.totalTimeMs - leader) : ''}</span>
+        </button>`).join('') : '<p class="empty">Super Sunday arvestuse aegu veel ei ole.</p>'}
     </section>`;
 }
 
 function render() {
   renderTabs();
+  renderCategorySelect();
   const stage = stages[stageIndex];
+  const sunday = tab === 'SUPER SUNDAY';
+  $('#prev').style.visibility = sunday ? 'hidden' : 'visible';
+  $('#next').style.visibility = sunday ? 'hidden' : 'visible';
+
   if (!stage) {
     $('#stageTitle').textContent = 'Ralli Live';
     $('#stageSub').textContent = config.eventName;
@@ -295,17 +385,21 @@ function render() {
     return;
   }
 
-  const reference = stage.drivers.find(driver => driver.id === referenceId) || stage.drivers[0];
-  $('#stageTitle').textContent = stage.title;
-  $('#stageSub').innerHTML = tab === 'KATSE'
-    ? `${Number(stage.distance || 0).toFixed(2)} km · ${stage.status || ''}`
-    : tab === 'SPLIT' && reference
-      ? `Võrdlus: <strong>${reference.name.toUpperCase()}</strong>`
-      : config.eventName;
+  const drivers = filteredDrivers(stage.drivers);
+  const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
+  $('#stageTitle').textContent = sunday ? 'Super Sunday' : stage.title;
+  $('#stageSub').innerHTML = sunday
+    ? config.eventName
+    : tab === 'KATSE'
+      ? `${Number(stage.distance || 0).toFixed(2)} km · ${stage.status || ''}`
+      : tab === 'SPLIT' && reference
+        ? `Võrdlus: <strong>${reference.name.toUpperCase()}</strong>`
+        : config.eventName;
 
   if (tab === 'KATSE') renderStageView(stage);
   else if (tab === 'SPLIT') renderSplitView(stage);
-  else renderOverallView(stage);
+  else if (tab === 'ÜLDSEIS') renderOverallView(stage);
+  else renderSundayView();
 
   document.querySelectorAll('[data-driver]').forEach(button => {
     button.onclick = () => {
@@ -317,7 +411,7 @@ function render() {
 }
 
 async function changeStage(direction) {
-  if (!stages.length) return;
+  if (!stages.length || tab === 'SUPER SUNDAY') return;
   stageIndex = (stageIndex + direction + stages.length) % stages.length;
   referenceId = null;
   render();
@@ -327,6 +421,12 @@ async function changeStage(direction) {
 $('#prev').onclick = () => changeStage(-1);
 $('#next').onclick = () => changeStage(1);
 $('#refresh').onclick = () => refresh(false);
+$('#category').onchange = event => {
+  category = event.target.value;
+  localStorage.setItem('ralli-category', category);
+  referenceId = filteredDrivers(stages[stageIndex]?.drivers || [])[0]?.id || null;
+  render();
+};
 
 render();
 refresh(true);
