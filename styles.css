@@ -191,34 +191,52 @@ button, select { font: inherit; }
   .top-tabs button[data-tab="DASHBOARD"] { display: none; }
 }
 
-/* v20 — discreet desktop dashboard scrollbars */
+/* v21 — compact dark desktop dashboard scrollbars */
 @media (min-width: 900px) {
+  /* Dark native controls in Chromium/Windows too. */
+  .dashboard-view,
+  .dash-panel,
+  .dash-panel-body,
+  .dash-panel-body * {
+    color-scheme: dark;
+  }
+
   .dash-panel-body {
     scrollbar-width: thin;
-    scrollbar-color: #303034 transparent;
+    scrollbar-color: #242428 #090909;
     scrollbar-gutter: auto;
   }
 
   .dash-panel-body::-webkit-scrollbar {
-    width: 5px;
-    height: 5px;
+    width: 4px !important;
+    height: 4px !important;
+    background: #090909 !important;
   }
 
-  .dash-panel-body::-webkit-scrollbar-track {
-    background: transparent;
+  .dash-panel-body::-webkit-scrollbar-track,
+  .dash-panel-body::-webkit-scrollbar-track-piece {
+    background: #090909 !important;
+    border: 0 !important;
   }
 
   .dash-panel-body::-webkit-scrollbar-thumb {
-    background: #303034;
-    border-radius: 999px;
-    border: 0;
+    background-color: #242428 !important;
+    border-radius: 999px !important;
+    border: 0 !important;
+    min-height: 24px;
   }
 
   .dash-panel-body::-webkit-scrollbar-thumb:hover {
-    background: #48484d;
+    background-color: #3a3a40 !important;
+  }
+
+  .dash-panel-body::-webkit-scrollbar-button {
+    display: none !important;
+    width: 0 !important;
+    height: 0 !important;
   }
 
   .dash-panel-body::-webkit-scrollbar-corner {
-    background: transparent;
+    background: #090909 !important;
   }
 }
