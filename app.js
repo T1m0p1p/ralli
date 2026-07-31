@@ -15,7 +15,7 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
-const APP_VERSION = 'v18';
+const APP_VERSION = 'v23';
 const tabs = ['DASHBOARD', 'KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
 const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
@@ -396,16 +396,27 @@ async function refresh(reloadBase = false) {
 }
 
 function renderCategorySelect() {
-  const select = $('#category');
+  const host = $('#categoryButtons');
+  if (!host) return;
   const categories = availableCategories();
   if (!categories.includes(category)) category = 'KÕIK';
-  select.innerHTML = categories.map(item => `<option value="${item}" ${item === category ? 'selected' : ''}>${item}</option>`).join('');
+  host.innerHTML = categories.map(item =>
+    `<button class="category-button ${item === category ? 'active' : ''}" data-category="${item}">${item}</button>`
+  ).join('');
+  host.querySelectorAll('[data-category]').forEach(button => {
+    button.onclick = () => {
+      category = button.dataset.category;
+      localStorage.setItem('ralli-category', category);
+      referenceId = filteredDrivers(stages[stageIndex]?.drivers || [])[0]?.id || null;
+      render();
+    };
+  });
 }
 
 function renderTabs() {
-  $('#tabs').innerHTML = tabs.map(name =>
+  $('#tabs').innerHTML = `<div class="rally-name">${config.eventName}</div><nav class="tab-nav">${tabs.map(name =>
     `<button class="${name === tab ? 'active' : ''}" data-tab="${name}">${name}</button>`
-  ).join('');
+  ).join('')}</nav>`;
   document.querySelectorAll('[data-tab]').forEach(button => {
     button.onclick = () => {
       tab = button.dataset.tab;
@@ -658,17 +669,8 @@ function renderDashboardSplit(stage) {
 }
 
 function renderDashboardView(stage) {
-  const runningCount = filteredDrivers(stage.drivers).filter(driver => ['moving', 'stopped'].includes(driverTrackState(driver))).length;
-  const finishedCount = filteredDrivers(stage.drivers).filter(driver => driverTrackState(driver) === 'finished').length;
-  const start = formatStageStart(stage);
-
   $('#content').innerHTML = `
     <section class="dashboard-view">
-      <div class="dash-topline">
-        <div><span class="dash-kicker">${config.eventName}</span><strong>${stage.title}</strong></div>
-        <div class="dash-stage-status">${stageTimingText(stage)}</div>
-        <div class="dash-stats"><span><b>${runningCount}</b> rajal</span><span><b>${finishedCount}</b> finišis</span><span>${start}</span></div>
-      </div>
       <div class="dashboard-grid">
         <section class="dash-panel dash-splits">
           <div class="dash-panel-head"><h2>SPLITID</h2><span>stardijärjekord · kliki sõitjal võrdluseks</span></div>
@@ -710,8 +712,13 @@ function render() {
     return;
   }
 
-  $('#stageTitle').textContent = dashboard ? 'Dashboard' : (sunday ? 'Super Sunday' : (tab === 'INFO' ? 'Live info' : stage.title));
-  $('#stageSub').innerHTML = dashboard ? `${stage.title} · ${stageTimingText(stage)}` : (sunday ? config.eventName : (tab === 'INFO' ? stage.title : stageTimingText(stage)));
+  $('#stageTitle').textContent = sunday ? 'Super Sunday' : stage.title;
+  $('#stageSub').innerHTML = sunday ? '' : stageTimingText(stage);
+  const runningCount = filteredDrivers(stage.drivers).filter(driver => ['moving', 'stopped'].includes(driverTrackState(driver))).length;
+  const finishedCount = filteredDrivers(stage.drivers).filter(driver => driverTrackState(driver) === 'finished').length;
+  $('#stageStats').innerHTML = dashboard && !sunday
+    ? `<span><b>${runningCount}</b> rajal</span><span><b>${finishedCount}</b> finišis</span>`
+    : '';
 
   if (tab === 'DASHBOARD') renderDashboardView(stage);
   else if (tab === 'KATSE') renderStageView(stage);
@@ -740,13 +747,6 @@ async function changeStage(direction) {
 $('#prev').onclick = () => changeStage(-1);
 $('#next').onclick = () => changeStage(1);
 $('#refresh').onclick = () => refresh(false);
-$('#category').onchange = event => {
-  category = event.target.value;
-  localStorage.setItem('ralli-category', category);
-  referenceId = filteredDrivers(stages[stageIndex]?.drivers || [])[0]?.id || null;
-  render();
-};
-
 render();
 refresh(true);
 setInterval(() => refresh(false), 10000);
@@ -756,9 +756,7 @@ setInterval(async () => {
 }, 5000);
 setInterval(() => {
   if (tab !== 'SUPER SUNDAY' && stages[stageIndex]) {
-    $('#stageSub').innerHTML = tab === 'DASHBOARD'
-      ? `${stages[stageIndex].title} · ${stageTimingText(stages[stageIndex])}`
-      : stageTimingText(stages[stageIndex]);
+    $('#stageSub').innerHTML = stageTimingText(stages[stageIndex]);
   }
 }, 1000);
 document.addEventListener('visibilitychange', () => {

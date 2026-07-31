@@ -191,52 +191,118 @@ button, select { font: inherit; }
   .top-tabs button[data-tab="DASHBOARD"] { display: none; }
 }
 
-/* v21 — compact dark desktop dashboard scrollbars */
+/* v22 — compact dark desktop dashboard scrollbars */
 @media (min-width: 900px) {
-  /* Dark native controls in Chromium/Windows too. */
-  .dashboard-view,
-  .dash-panel,
-  .dash-panel-body,
-  .dash-panel-body * {
-    color-scheme: dark;
-  }
+  .dashboard-view { color-scheme: dark; }
 
   .dash-panel-body {
     scrollbar-width: thin;
-    scrollbar-color: #242428 #090909;
+    scrollbar-color: #2b2b2f transparent;
     scrollbar-gutter: auto;
   }
 
   .dash-panel-body::-webkit-scrollbar {
-    width: 4px !important;
-    height: 4px !important;
-    background: #090909 !important;
+    width: 5px;
+    height: 5px;
   }
 
   .dash-panel-body::-webkit-scrollbar-track,
   .dash-panel-body::-webkit-scrollbar-track-piece {
-    background: #090909 !important;
-    border: 0 !important;
+    background: transparent;
   }
 
   .dash-panel-body::-webkit-scrollbar-thumb {
-    background-color: #242428 !important;
-    border-radius: 999px !important;
-    border: 0 !important;
-    min-height: 24px;
+    background: #2b2b2f;
+    border-radius: 8px;
+    border: 0;
   }
 
   .dash-panel-body::-webkit-scrollbar-thumb:hover {
-    background-color: #3a3a40 !important;
+    background: #44444a;
   }
 
-  .dash-panel-body::-webkit-scrollbar-button {
-    display: none !important;
-    width: 0 !important;
-    height: 0 !important;
+  .dash-panel-body::-webkit-scrollbar-button,
+  .dash-panel-body::-webkit-scrollbar-button:single-button {
+    width: 0;
+    height: 0;
+    display: none;
   }
 
   .dash-panel-body::-webkit-scrollbar-corner {
-    background: #090909 !important;
+    background: transparent;
   }
+}
+
+
+/* v23 — unified rally / stage / category header */
+.top-tabs {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  border-bottom: 1px solid var(--line);
+}
+.tab-nav { display: flex; align-items: stretch; justify-content: center; }
+.tab-nav button {
+  position: relative; border: 0; background: transparent; color: var(--muted);
+  padding: 12px 9px 10px; font-size: 9px; white-space: nowrap;
+}
+.tab-nav button.active { color: #fff; font-weight: 650; }
+.tab-nav button.active::after { content: ""; position: absolute; left: 12%; right: 12%; bottom: -1px; height: 1px; background: #fff; }
+.rally-name { display: none; }
+
+.context-bar {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  min-height: 44px;
+  padding: 4px 10px;
+  border-bottom: 1px solid var(--line);
+  gap: 10px;
+}
+.category-zone { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.category-label { color: #6e6e73; font-size: 9px; }
+.category-buttons { display: flex; align-items: center; gap: 3px; }
+.category-button {
+  border: 1px solid #29292d; border-radius: 5px; background: #070707; color: #77777c;
+  padding: 4px 8px; font-size: 9px; line-height: 1; cursor: pointer;
+}
+.category-button:hover { color: #d1d1d6; border-color: #3a3a3e; }
+.category-button.active { color: #fff; border-color: #6a6a70; background: #141416; font-weight: 650; }
+.stage-picker { display: flex; align-items: center; justify-content: center; gap: 5px; min-width: 0; }
+.stage-picker h1 { margin: 0; max-width: 430px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 650; }
+.stage-nav { border: 0; background: transparent; color: #8e8e93; padding: 2px 7px; font-size: 22px; line-height: 1; cursor: pointer; }
+.stage-nav:hover { color: #fff; }
+.stage-meta { display: flex; align-items: center; justify-content: flex-end; gap: 14px; min-width: 0; color: #8e8e93; font-size: 9px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.stage-meta #stageStats { display: flex; align-items: center; gap: 9px; }
+.stage-meta #stageStats b { color: #fff; font-size: 10px; }
+
+@media (min-width: 900px) {
+  .top-tabs { height: 38px; padding: 0; }
+  .tab-nav { gap: 12px; }
+  .tab-nav button { padding: 9px 6px 8px; font-size: 10px !important; }
+  .rally-name {
+    display: block; position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+    max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    color: #8e8e93; font-size: 9px; letter-spacing: .035em; text-transform: uppercase;
+  }
+  .stage-head, .filter-bar { display: none !important; }
+  .context-bar { flex: 0 0 42px; min-height: 42px; padding: 4px 12px; }
+  #content { min-height: 0; flex: 1; overflow: auto; }
+  .dashboard-view { padding-top: 7px; }
+  .dash-topline { display: none !important; }
+}
+
+@media (max-width: 899px) {
+  .top-tabs { padding-top: max(8px, env(safe-area-inset-top)); }
+  .tab-nav { width: 100%; }
+  .tab-nav button { flex: 1; padding-left: 1px; padding-right: 1px; }
+  .tab-nav button[data-tab="DASHBOARD"] { display: none; }
+  .context-bar { grid-template-columns: 1fr; gap: 5px; padding: 6px 10px; }
+  .stage-picker { grid-row: 1; }
+  .category-zone { grid-row: 2; justify-content: center; }
+  .stage-meta { grid-row: 3; justify-content: center; }
+  .category-label { display: none; }
+  .category-button { padding: 4px 7px; }
+  .stage-picker h1 { font-size: 13px; max-width: calc(100vw - 90px); }
 }

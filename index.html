@@ -8,37 +8,31 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <title>Ralli Live</title>
-<link rel="stylesheet" href="styles.css?v=21.0.0" />
+<link rel="stylesheet" href="styles.css?v=23.0.0" />
 </head>
 <body>
 <main class="app-shell">
   <section class="phone-app">
-    <header class="top-tabs" id="tabs">
-      <button data-tab="DASHBOARD">DASHBOARD</button>
-      <button data-tab="KATSE">KATSE</button>
-      <button class="active" data-tab="SPLIT">SPLIT</button>
-      <button data-tab="ÜLDSEIS">ÜLDSEIS</button>
-      <button data-tab="SUPER SUNDAY">SUPER SUNDAY</button>
-      <button data-tab="INFO">INFO</button>
-    </header>
-    <div class="stage-head">
-      <button class="icon-button" id="prev" aria-label="Eelmine katse">‹</button>
-      <div><h1 id="stageTitle">Ralli Live</h1><p id="stageSub">Laen andmeid…</p></div>
-      <button class="icon-button" id="next" aria-label="Järgmine katse">›</button>
-    </div>
-    <div class="filter-bar">
-      <label for="category">Kategooria</label>
-      <select id="category" aria-label="Kategooria">
-        <option value="KÕIK">KÕIK</option>
-        <option value="WRC">WRC</option>
-        <option value="WRC2">WRC2</option>
-        <option value="WRC3">WRC3</option>
-      </select>
+    <header class="top-tabs" id="tabs"></header>
+    <div class="context-bar">
+      <div class="category-zone">
+        <span class="category-label">Kategooria</span>
+        <div class="category-buttons" id="categoryButtons" aria-label="Kategooria"></div>
+      </div>
+      <div class="stage-picker">
+        <button class="stage-nav" id="prev" aria-label="Eelmine katse">‹</button>
+        <h1 id="stageTitle">Ralli Live</h1>
+        <button class="stage-nav" id="next" aria-label="Järgmine katse">›</button>
+      </div>
+      <div class="stage-meta">
+        <span id="stageSub">Laen andmeid…</span>
+        <span id="stageStats"></span>
+      </div>
     </div>
     <section id="content"><p class="empty">Andmeid laaditakse…</p></section>
-    <footer class="refresh-bar"><button id="refresh">↻ Värskenda</button><span id="updated"></span><small class="version">v21</small></footer>
+    <footer class="refresh-bar"><button id="refresh">↻ Värskenda</button><span id="updated"></span><small class="version">v23</small></footer>
   </section>
 </main>
-<script src="app.js?v=21.0.0"></script>
+<script src="app.js?v=23.0.0"></script>
 </body>
 </html>
