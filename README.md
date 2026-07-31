@@ -1,3 +1,3 @@
-# Ralli Live v12
+Ralli Live v14
 
-Parandatud WRC kontrollaegade UTC tõlgendus. Ilma ajavööndita `actualDateTime` ja `dueDateTime` väärtusi käsitletakse UTC-na, mistõttu sõitja jääb enne oma tegelikku katse stardiaega valgeks.
+Parandatud auto numbri sidumine telemeetriaga ja splitiveergude laius.

@@ -189,13 +189,17 @@ body {
 .driver-cell.selected strong{font-weight:700}
 
 .info-wrap{width:100%;max-width:100%;overflow-x:auto;padding:2px 10px 12px;-webkit-overflow-scrolling:touch}
-.info-table{width:max-content;display:grid;grid-template-columns:132px 76px 66px 92px 48px 62px;align-items:center;font-variant-numeric:tabular-nums}
+.info-table{width:max-content;display:grid;grid-template-columns:132px 84px 72px 112px 50px 64px;align-items:center;font-variant-numeric:tabular-nums}
 .info-head{height:34px;display:flex;align-items:center;justify-content:center;color:#8e8e93;font-size:9px;border-bottom:1px solid var(--line)}
 .info-head:first-child{justify-content:flex-start;padding-left:3px}
 .info-driver{height:29px;border:0;background:#000;display:flex;align-items:center;gap:7px;padding:0 3px;text-align:left;white-space:nowrap;overflow:hidden}
 .info-driver span{width:25px;font-size:9px;flex:0 0 auto}
 .info-driver strong{min-width:0;overflow:hidden;text-overflow:ellipsis;font-size:11px;font-weight:500}
-.info-cell{height:29px;display:flex;align-items:center;justify-content:center;padding:0 7px;color:#f5f5f7;font-size:11px;white-space:nowrap}
-.status-cell{justify-content:flex-start}
+.info-cell{height:29px;min-width:0;display:flex;align-items:center;justify-content:center;padding:0 6px;color:#f5f5f7;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;border-bottom:1px solid rgba(255,255,255,.025)}
+.status-cell{justify-content:flex-start;overflow:hidden;text-overflow:ellipsis}
 .sticky-info{position:sticky;left:0;z-index:3;background:#000;box-shadow:1px 0 0 var(--line)}
 .info-head.sticky-info{z-index:4}
+
+/* v14: keep split values readable and separated */
+.split-header,.split-cell{width:74px;min-width:74px;max-width:74px;overflow:hidden;white-space:nowrap}
+.split-cell{padding:0 4px}

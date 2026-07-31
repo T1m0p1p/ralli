@@ -182,9 +182,11 @@ function filteredDrivers(drivers) {
 }
 
 function normalizeCarNumber(value) {
-  const text = String(value ?? '').trim();
-  const numeric = text.replace(/^0+/, '');
-  return numeric || '0';
+  // WRC entries may use values such as '#33', while telemetry uses '033'.
+  // Keep digits only and remove leading zeroes so both resolve to '33'.
+  const digits = String(value ?? '').replace(/\D+/g, '');
+  const normalized = digits.replace(/^0+/, '');
+  return normalized || '0';
 }
 
 function telemetryFor(driver) {
@@ -437,7 +439,7 @@ function renderSplitView(stage) {
   }
 
   const columns = stage.splitPoints.length + 2;
-  let html = `<section class="split-wrap"><div class="split-table" style="grid-template-columns:132px repeat(${columns - 1},max-content)"><div></div>`;
+  let html = `<section class="split-wrap"><div class="split-table" style="grid-template-columns:132px repeat(${columns - 1},74px)"><div></div>`;
   html += stage.splitPoints.map((point, index) => `
     <div class="split-header"><span>S${index + 1}</span><small>${Number(point.distance || 0).toFixed(2)} km</small></div>`).join('');
   html += '<div class="split-header"><span>FIN</span></div>';
@@ -500,11 +502,23 @@ function renderSundayView() {
     </section>`;
 }
 
-function formatTelemetryValue(value, suffix = '') {
+function formatTelemetryNumber(value, options = {}) {
   if (value === null || value === undefined || value === '') return '—';
   const numeric = Number(value);
-  if (Number.isFinite(numeric)) return `${numeric}${suffix}`;
-  return `${value}${suffix}`;
+  if (!Number.isFinite(numeric)) return '—';
+
+  const {
+    decimals = 0,
+    suffix = '',
+    min = null,
+    max = null
+  } = options;
+
+  let output = numeric;
+  if (min !== null) output = Math.max(min, output);
+  if (max !== null) output = Math.min(max, output);
+
+  return `${output.toFixed(decimals)}${suffix}`;
 }
 
 function renderInfoView(stage) {
@@ -528,11 +542,11 @@ function renderInfoView(stage) {
             <button class="info-driver sticky-info track-${trackState}" data-driver="${driver.id}">
               <span>#${driver.number}</span><strong>${driver.name}</strong>
             </button>
-            <div class="info-cell">${formatTelemetryValue(live?.speed, ' km/h')}</div>
-            <div class="info-cell">${formatTelemetryValue(live?.kms, ' km')}</div>
+            <div class="info-cell">${formatTelemetryNumber(live?.speed, { decimals: 0, suffix: ' km/h', min: 0 })}</div>
+            <div class="info-cell">${formatTelemetryNumber(live?.kms, { decimals: 1, suffix: ' km', min: 0 })}</div>
             <div class="info-cell status-cell">${displayTelemetryStatus(stageDriver, live)}</div>
-            <div class="info-cell">${formatTelemetryValue(live?.gear)}</div>
-            <div class="info-cell">${formatTelemetryValue(live?.throttle, '%')}</div>`;
+            <div class="info-cell">${formatTelemetryNumber(live?.gear, { decimals: 0, min: 0 })}</div>
+            <div class="info-cell">${formatTelemetryNumber(live?.throttle, { decimals: 0, suffix: '%', min: 0, max: 100 })}</div>`;
         }).join('')}
       </div>
     </section>`;
