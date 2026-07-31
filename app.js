@@ -15,7 +15,7 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
-const APP_VERSION = 'v28';
+const APP_VERSION = 'v29';
 const tabs = ['DASHBOARD', 'KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
 const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
@@ -26,7 +26,10 @@ let stageIndex = 0;
 let entries = new Map();
 let referenceId = null;
 let category = localStorage.getItem('ralli-category') || 'KÕIK';
-let dashboardTop15 = localStorage.getItem('ralli-dashboard-top15') === '1';
+let dashboardFocus = localStorage.getItem('ralli-dashboard-focus') === '1';
+let previousOverallSnapshot = [];
+let previousOverallStageTitle = '';
+const previousOverallCache = new Map();
 let loading = false;
 let telemetry = new Map();
 let telemetryLoading = false;
@@ -195,22 +198,82 @@ function filteredDrivers(drivers) {
   return category === 'KÕIK' ? drivers : drivers.filter(driver => driver.category === category);
 }
 
-function dashboardTop15Ids(stage) {
-  if (!dashboardTop15 || !stage) return null;
-  return new Set(
-    filteredDrivers(stage.drivers || [])
-      .filter(driver => Number.isFinite(driver.overallTimeMs))
-      .slice()
-      .sort((a, b) => a.overallTimeMs - b.overallTimeMs)
-      .slice(0, 15)
-      .map(driver => String(driver.id))
-  );
+function isEstonianEntry(entry) {
+  const driver = entry?.driver || {};
+  const candidates = [
+    driver.countryCode, driver.nationalityCode, driver.nationality,
+    driver.country?.code, driver.country?.countryCode, driver.country?.iso2, driver.country?.iso3, driver.country?.name,
+    driver.nationality?.code, driver.nationality?.countryCode, driver.nationality?.iso2, driver.nationality?.iso3, driver.nationality?.name
+  ].filter(value => typeof value === 'string').map(value => value.trim().toUpperCase());
+  if (candidates.some(value => ['EE', 'EST', 'ESTONIA', 'EESTI'].includes(value))) return true;
+
+  // API väljad võivad eri rallidel erineda. Kontrollime juhile kuuluvaid riigivälju ka üldisemalt.
+  const blob = JSON.stringify(driver).toUpperCase();
+  return /(?:COUNTRY|NATIONALITY|ISO2|ISO3|CODE)\"?\s*:\s*\"?(?:EE|EST|ESTONIA|EESTI)(?:\"|,|})/.test(blob);
 }
 
-function dashboardFilteredDrivers(drivers, stage = stages[stageIndex]) {
+async function loadPreviousOverallSnapshot() {
+  previousOverallSnapshot = [];
+  previousOverallStageTitle = '';
+  if (stageIndex <= 0) return;
+
+  // Kasutame viimast varasemat katset, mille results.json sisaldab üldseisu.
+  for (let index = stageIndex - 1; index >= 0; index -= 1) {
+    const previous = stages[index];
+    if (!previous) continue;
+    const cacheKey = String(previous.id);
+    let rows = previousOverallCache.get(cacheKey);
+    if (!rows || !/completed|finished/i.test(String(previous.status || ''))) {
+      try {
+        const query = `?rallyId=${encodeURIComponent(config.rallyId)}`;
+        const result = await getJSON(api(`/stages/${previous.id}/results.json${query}`));
+        rows = Array.isArray(result) ? result : [];
+        if (/completed|finished/i.test(String(previous.status || ''))) previousOverallCache.set(cacheKey, rows);
+      } catch (error) {
+        console.warn(`Eelmise katse ${previous.title} üldseisu laadimine ebaõnnestus:`, error);
+        rows = [];
+      }
+    }
+    const usable = rows.filter(row => Number.isFinite(row.totalTimeMs));
+    if (usable.length) {
+      previousOverallSnapshot = usable;
+      previousOverallStageTitle = previous.title;
+      return;
+    }
+  }
+}
+
+function dashboardFocusIds() {
+  if (!dashboardFocus || !previousOverallSnapshot.length) return null;
+
+  const ranked = previousOverallSnapshot
+    .map(row => {
+      const entry = entries.get(String(row.entryId));
+      return entry ? { ...entry, totalTimeMs: row.totalTimeMs } : null;
+    })
+    .filter(Boolean);
+
+  const inCategory = category === 'KÕIK' ? ranked : ranked.filter(driver => driver.category === category);
+  const top10 = inCategory
+    .filter(driver => Number.isFinite(driver.totalTimeMs))
+    .slice()
+    .sort((a, b) => a.totalTimeMs - b.totalTimeMs)
+    .slice(0, 10);
+  const estonians = inCategory.filter(driver => driver.isEstonian);
+
+  return new Set([...top10, ...estonians].map(driver => String(driver.id)));
+}
+
+function dashboardFocusDrivers(drivers) {
   const visible = filteredDrivers(drivers || []);
-  const ids = dashboardTop15Ids(stage);
+  const ids = dashboardFocusIds();
   return ids ? visible.filter(driver => ids.has(String(driver.id))) : visible;
+}
+
+function dashboardFocusLabel() {
+  if (!dashboardFocus) return 'kõik';
+  if (!previousOverallSnapshot.length) return 'TOP10 + EE · eelmine üldseis puudub';
+  return `TOP10 + EE · ${previousOverallStageTitle} lõpp`;
 }
 
 function normalizeCarNumber(value) {
@@ -279,7 +342,8 @@ async function loadBaseData() {
       order: entry.entryListOrder ?? 999,
       number: entry.identifier || '',
       priority: entry.priority || '',
-      category: categoryName(entry)
+      category: categoryName(entry),
+      isEstonian: isEstonianEntry(entry)
     }
   ]));
 
@@ -366,6 +430,8 @@ async function loadCurrentStage() {
     return aTime - bTime || a.order - b.order;
   });
 
+  await loadPreviousOverallSnapshot();
+
   const visible = filteredDrivers(stage.drivers);
   if (!referenceId || !visible.some(driver => driver.id === referenceId)) {
     referenceId = visible[0]?.id || null;
@@ -440,21 +506,21 @@ function renderCategorySelect() {
       localStorage.setItem('ralli-category', category);
       const currentStage = stages[stageIndex];
       const candidates = tab === 'DASHBOARD'
-        ? dashboardFilteredDrivers(currentStage?.drivers || [], currentStage)
+        ? dashboardFocusDrivers(currentStage?.drivers || [])
         : filteredDrivers(currentStage?.drivers || []);
       referenceId = candidates[0]?.id || null;
       render();
     };
   });
 
-  const top15Button = $('#top15Toggle');
-  if (top15Button) {
-    top15Button.hidden = tab !== 'DASHBOARD';
-    top15Button.classList.toggle('active', dashboardTop15);
-    top15Button.setAttribute('aria-pressed', dashboardTop15 ? 'true' : 'false');
-    top15Button.title = dashboardTop15
-      ? 'Näita kõiki valitud kategooria sõitjaid'
-      : 'Näita ainult valitud kategooria üldarvestuse TOP15 sõitjaid';
+  const focusButton = $('#focusToggle');
+  if (focusButton) {
+    focusButton.hidden = tab !== 'DASHBOARD';
+    focusButton.classList.toggle('active', dashboardFocus);
+    focusButton.setAttribute('aria-pressed', dashboardFocus ? 'true' : 'false');
+    focusButton.title = dashboardFocus
+      ? 'Näita SPLITID ja LIVE plokkides kõiki valitud kategooria sõitjaid'
+      : 'Näita SPLITID ja LIVE plokkides eelmise katse lõpu üldseisu TOP10 + kõiki Eesti sõitjaid';
   }
 }
 
@@ -471,7 +537,7 @@ function renderTabs() {
 }
 
 function renderStageView(stage) {
-  const drivers = dashboardFilteredDrivers(stage.drivers, stage)
+  const drivers = filteredDrivers(stage.drivers)
     .filter(driver => Number.isFinite(driver.stageTimeMs))
     .sort((a, b) => a.stageTimeMs - b.stageTimeMs);
   const leader = drivers[0]?.stageTimeMs;
@@ -488,7 +554,7 @@ function renderStageView(stage) {
 }
 
 function renderSplitView(stage) {
-  const drivers = dashboardFilteredDrivers(stage.drivers, stage)
+  const drivers = filteredDrivers(stage.drivers)
     .slice()
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || (a.number ?? 999) - (b.number ?? 999));
   const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
@@ -524,7 +590,7 @@ function renderSplitView(stage) {
 }
 
 function renderOverallView(stage) {
-  const drivers = dashboardFilteredDrivers(stage.drivers, stage)
+  const drivers = filteredDrivers(stage.drivers)
     .filter(driver => Number.isFinite(driver.overallTimeMs))
     .sort((a, b) => a.overallTimeMs - b.overallTimeMs);
   const leader = drivers[0]?.overallTimeMs;
@@ -542,7 +608,7 @@ function renderOverallView(stage) {
 }
 
 function renderSundayView() {
-  const drivers = dashboardFilteredDrivers(sundayResults);
+  const drivers = filteredDrivers(sundayResults);
   const maxCompleted = Math.max(0, ...drivers.map(driver => driver.completedStages));
   const classified = drivers.filter(driver => driver.completedStages === maxCompleted && maxCompleted > 0)
     .sort((a, b) => a.totalTimeMs - b.totalTimeMs);
@@ -648,7 +714,7 @@ function dashboardOverallRows(stage) {
 }
 
 function dashboardLiveRows(stage) {
-  const drivers = dashboardFilteredDrivers(stage.drivers, stage)
+  const drivers = dashboardFocusDrivers(stage.drivers)
     .slice()
     .sort((a, b) => {
       const states = { moving: 0, stopped: 1, finished: 2, 'not-started': 3 };
@@ -684,7 +750,7 @@ function dashboardSundayRows() {
 }
 
 function renderDashboardSplit(stage) {
-  const drivers = filteredDrivers(stage.drivers)
+  const drivers = dashboardFocusDrivers(stage.drivers)
     .slice()
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || Number(a.number || 999) - Number(b.number || 999));
   const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
@@ -738,23 +804,23 @@ function renderDashboardView(stage) {
     <section class="dashboard-view">
       <div class="dashboard-grid">
         <section class="dash-panel dash-splits">
-          <div class="dash-panel-head"><h2>SPLITID</h2><span>stardijärjekord · kliki sõitjal võrdluseks</span></div>
+          <div class="dash-panel-head"><h2>SPLITID</h2><span>${dashboardFocus ? dashboardFocusLabel() + ' · ' : ''}stardijärjekord · kliki sõitjal võrdluseks</span></div>
           <div class="dash-panel-body split-body">${renderDashboardSplit(stage)}</div>
         </section>
         <section class="dash-panel dash-stage">
-          <div class="dash-panel-head"><h2>KATSE</h2><span>${dashboardTop15 ? 'TOP15 üldseisu järgi' : 'kõik'}</span></div>
+          <div class="dash-panel-head"><h2>KATSE</h2><span>kõik</span></div>
           <div class="dash-panel-body">${dashboardStageRows(stage)}</div>
         </section>
         <section class="dash-panel dash-overall">
-          <div class="dash-panel-head"><h2>ÜLDSEIS</h2><span>${dashboardTop15 ? 'TOP15' : 'kõik'}</span></div>
+          <div class="dash-panel-head"><h2>ÜLDSEIS</h2><span>kõik</span></div>
           <div class="dash-panel-body">${dashboardOverallRows(stage)}</div>
         </section>
         <section class="dash-panel dash-live">
-          <div class="dash-panel-head"><h2>LIVE</h2><span>staatus · kiirus · km</span></div>
+          <div class="dash-panel-head"><h2>LIVE</h2><span>${dashboardFocus ? dashboardFocusLabel() + ' · ' : ''}staatus · kiirus · km</span></div>
           <div class="dash-panel-body">${dashboardLiveRows(stage)}</div>
         </section>
         <section class="dash-panel dash-sunday">
-          <div class="dash-panel-head"><h2>SUPER SUNDAY</h2><span>${dashboardTop15 ? 'TOP15 üldseisu järgi' : 'kõik'}</span></div>
+          <div class="dash-panel-head"><h2>SUPER SUNDAY</h2><span>kõik</span></div>
           <div class="dash-panel-body">${dashboardSundayRows()}</div>
         </section>
       </div>
@@ -780,7 +846,7 @@ function render() {
 
   $('#stageTitle').textContent = sunday ? 'Super Sunday' : stage.title;
   $('#stageSub').innerHTML = sunday ? '' : stageTimingText(stage);
-  const dashboardDrivers = dashboard ? dashboardFilteredDrivers(stage.drivers, stage) : filteredDrivers(stage.drivers);
+  const dashboardDrivers = filteredDrivers(stage.drivers);
   const runningCount = dashboardDrivers.filter(driver => ['moving', 'stopped'].includes(driverTrackState(driver))).length;
   const finishedCount = dashboardDrivers.filter(driver => driverTrackState(driver) === 'finished').length;
   $('#stageStats').innerHTML = dashboard && !sunday
@@ -820,19 +886,20 @@ async function changeStage(direction) {
   await refresh(false);
 }
 
-const top15Toggle = $('#top15Toggle');
-if (top15Toggle) {
-  top15Toggle.onclick = () => {
-    dashboardTop15 = !dashboardTop15;
-    localStorage.setItem('ralli-dashboard-top15', dashboardTop15 ? '1' : '0');
+const focusToggle = $('#focusToggle');
+if (focusToggle) {
+  focusToggle.onclick = () => {
+    dashboardFocus = !dashboardFocus;
+    localStorage.setItem('ralli-dashboard-focus', dashboardFocus ? '1' : '0');
     const stage = stages[stageIndex];
-    const visible = dashboardFilteredDrivers(stage?.drivers || [], stage);
+    const visible = dashboardFocusDrivers(stage?.drivers || []);
     if (!visible.some(driver => String(driver.id) === String(referenceId))) {
       referenceId = visible[0]?.id || null;
     }
     render();
   };
 }
+
 
 $('#prev').onclick = () => changeStage(-1);
 $('#next').onclick = () => changeStage(1);

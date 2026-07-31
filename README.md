@@ -1,11 +1,10 @@
-# Ralli Live v28
+# Ralli Live v29
 
-Puhas nelja failiga versioon.
+Dashboardi fookusfilter on nüüd **TOP10 + EE**.
 
-## v28 muudatus
-
-Dashboardi kategoorianuppude kõrvale lisatud **TOP15** lüliti.
-
-Kui TOP15 on aktiivne, jäetakse kõigis Dashboardi tabelites alles ainult need sõitjad, kes on valitud kategooria hetke üldarvestuses esimese 15 hulgas. Näiteks **WRC2 + TOP15** kuvab ainult WRC2 üldarvestuse hetke TOP15 sõitjaid.
-
-TOP15 valik säilib brauseris ning ei mõjuta KATSE, SPLIT, ÜLDSEIS, SUPER SUNDAY ega INFO eraldi vaateid.
+- TOP10 võetakse alati valitud katsele eelnenud viimase katse lõpu üldarvestusest.
+- TOP10 arvutatakse valitud kategooria sees.
+- Lisaks jäetakse nähtavale kõik sama kategooria Eesti sõitjad, ka siis kui nad pole TOP10-s.
+- Filter mõjutab ainult Dashboardi **SPLITID** ja **LIVE** plokke.
+- **KATSE**, **ÜLDSEIS** ja **SUPER SUNDAY** kuvavad alati kõik valitud kategooria sõitjad.
+- Tavalised SPLIT/INFO/KATSE/ÜLDSEIS/SUPER SUNDAY sakid ei kasuta Dashboardi fookusfiltrit.

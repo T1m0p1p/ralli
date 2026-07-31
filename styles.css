@@ -308,8 +308,8 @@ button, select { font: inherit; }
 }
 
 
-/* v28 — Dashboard TOP15 overall filter */
-.top15-button {
+/* v29 — Dashboard TOP10 + Eesti focus filter */
+.focus-button {
   border: 1px solid #29292d;
   border-radius: 5px;
   background: #070707;
@@ -320,7 +320,7 @@ button, select { font: inherit; }
   cursor: pointer;
   font-weight: 650;
 }
-.top15-button:hover { color: #d1d1d6; border-color: #3a3a3e; }
-.top15-button.active { color: #fff; border-color: #8e8e93; background: #242427; }
-.top15-button[hidden] { display: none !important; }
-@media (max-width: 899px) { .top15-button { display: none !important; } }
+.focus-button:hover { color: #d1d1d6; border-color: #3a3a3e; }
+.focus-button.active { color: #fff; border-color: #8e8e93; background: #242427; }
+.focus-button[hidden] { display: none !important; }
+@media (max-width: 899px) { .focus-button { display: none !important; } }
