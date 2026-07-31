@@ -15,7 +15,7 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
-const APP_VERSION = 'v26';
+const APP_VERSION = 'v28';
 const tabs = ['DASHBOARD', 'KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
 const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
@@ -26,6 +26,7 @@ let stageIndex = 0;
 let entries = new Map();
 let referenceId = null;
 let category = localStorage.getItem('ralli-category') || 'KÕIK';
+let dashboardTop15 = localStorage.getItem('ralli-dashboard-top15') === '1';
 let loading = false;
 let telemetry = new Map();
 let telemetryLoading = false;
@@ -192,6 +193,24 @@ function availableCategories() {
 
 function filteredDrivers(drivers) {
   return category === 'KÕIK' ? drivers : drivers.filter(driver => driver.category === category);
+}
+
+function dashboardTop15Ids(stage) {
+  if (!dashboardTop15 || !stage) return null;
+  return new Set(
+    filteredDrivers(stage.drivers || [])
+      .filter(driver => Number.isFinite(driver.overallTimeMs))
+      .slice()
+      .sort((a, b) => a.overallTimeMs - b.overallTimeMs)
+      .slice(0, 15)
+      .map(driver => String(driver.id))
+  );
+}
+
+function dashboardFilteredDrivers(drivers, stage = stages[stageIndex]) {
+  const visible = filteredDrivers(drivers || []);
+  const ids = dashboardTop15Ids(stage);
+  return ids ? visible.filter(driver => ids.has(String(driver.id))) : visible;
 }
 
 function normalizeCarNumber(value) {
@@ -419,10 +438,24 @@ function renderCategorySelect() {
     button.onclick = () => {
       category = button.dataset.category;
       localStorage.setItem('ralli-category', category);
-      referenceId = filteredDrivers(stages[stageIndex]?.drivers || [])[0]?.id || null;
+      const currentStage = stages[stageIndex];
+      const candidates = tab === 'DASHBOARD'
+        ? dashboardFilteredDrivers(currentStage?.drivers || [], currentStage)
+        : filteredDrivers(currentStage?.drivers || []);
+      referenceId = candidates[0]?.id || null;
       render();
     };
   });
+
+  const top15Button = $('#top15Toggle');
+  if (top15Button) {
+    top15Button.hidden = tab !== 'DASHBOARD';
+    top15Button.classList.toggle('active', dashboardTop15);
+    top15Button.setAttribute('aria-pressed', dashboardTop15 ? 'true' : 'false');
+    top15Button.title = dashboardTop15
+      ? 'Näita kõiki valitud kategooria sõitjaid'
+      : 'Näita ainult valitud kategooria üldarvestuse TOP15 sõitjaid';
+  }
 }
 
 function renderTabs() {
@@ -438,7 +471,7 @@ function renderTabs() {
 }
 
 function renderStageView(stage) {
-  const drivers = filteredDrivers(stage.drivers)
+  const drivers = dashboardFilteredDrivers(stage.drivers, stage)
     .filter(driver => Number.isFinite(driver.stageTimeMs))
     .sort((a, b) => a.stageTimeMs - b.stageTimeMs);
   const leader = drivers[0]?.stageTimeMs;
@@ -455,7 +488,7 @@ function renderStageView(stage) {
 }
 
 function renderSplitView(stage) {
-  const drivers = filteredDrivers(stage.drivers)
+  const drivers = dashboardFilteredDrivers(stage.drivers, stage)
     .slice()
     .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || (a.number ?? 999) - (b.number ?? 999));
   const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
@@ -491,7 +524,7 @@ function renderSplitView(stage) {
 }
 
 function renderOverallView(stage) {
-  const drivers = filteredDrivers(stage.drivers)
+  const drivers = dashboardFilteredDrivers(stage.drivers, stage)
     .filter(driver => Number.isFinite(driver.overallTimeMs))
     .sort((a, b) => a.overallTimeMs - b.overallTimeMs);
   const leader = drivers[0]?.overallTimeMs;
@@ -509,7 +542,7 @@ function renderOverallView(stage) {
 }
 
 function renderSundayView() {
-  const drivers = filteredDrivers(sundayResults);
+  const drivers = dashboardFilteredDrivers(sundayResults);
   const maxCompleted = Math.max(0, ...drivers.map(driver => driver.completedStages));
   const classified = drivers.filter(driver => driver.completedStages === maxCompleted && maxCompleted > 0)
     .sort((a, b) => a.totalTimeMs - b.totalTimeMs);
@@ -615,7 +648,7 @@ function dashboardOverallRows(stage) {
 }
 
 function dashboardLiveRows(stage) {
-  const drivers = filteredDrivers(stage.drivers)
+  const drivers = dashboardFilteredDrivers(stage.drivers, stage)
     .slice()
     .sort((a, b) => {
       const states = { moving: 0, stopped: 1, finished: 2, 'not-started': 3 };
@@ -680,7 +713,27 @@ function renderDashboardSplit(stage) {
   return html;
 }
 
+function captureDashboardScrollState() {
+  const state = { windowY: window.scrollY };
+  document.querySelectorAll('.dash-panel-body').forEach((el, index) => {
+    state[index] = { top: el.scrollTop, left: el.scrollLeft };
+  });
+  return state;
+}
+
+function restoreDashboardScrollState(state) {
+  if (!state) return;
+  document.querySelectorAll('.dash-panel-body').forEach((el, index) => {
+    const pos = state[index];
+    if (!pos) return;
+    el.scrollTop = pos.top;
+    el.scrollLeft = pos.left;
+  });
+  if (Number.isFinite(state.windowY)) window.scrollTo(0, state.windowY);
+}
+
 function renderDashboardView(stage) {
+  const scrollState = captureDashboardScrollState();
   $('#content').innerHTML = `
     <section class="dashboard-view">
       <div class="dashboard-grid">
@@ -689,11 +742,11 @@ function renderDashboardView(stage) {
           <div class="dash-panel-body split-body">${renderDashboardSplit(stage)}</div>
         </section>
         <section class="dash-panel dash-stage">
-          <div class="dash-panel-head"><h2>KATSE</h2><span>kõik</span></div>
+          <div class="dash-panel-head"><h2>KATSE</h2><span>${dashboardTop15 ? 'TOP15 üldseisu järgi' : 'kõik'}</span></div>
           <div class="dash-panel-body">${dashboardStageRows(stage)}</div>
         </section>
         <section class="dash-panel dash-overall">
-          <div class="dash-panel-head"><h2>ÜLDSEIS</h2><span>kõik</span></div>
+          <div class="dash-panel-head"><h2>ÜLDSEIS</h2><span>${dashboardTop15 ? 'TOP15' : 'kõik'}</span></div>
           <div class="dash-panel-body">${dashboardOverallRows(stage)}</div>
         </section>
         <section class="dash-panel dash-live">
@@ -701,11 +754,12 @@ function renderDashboardView(stage) {
           <div class="dash-panel-body">${dashboardLiveRows(stage)}</div>
         </section>
         <section class="dash-panel dash-sunday">
-          <div class="dash-panel-head"><h2>SUPER SUNDAY</h2><span>kõik</span></div>
+          <div class="dash-panel-head"><h2>SUPER SUNDAY</h2><span>${dashboardTop15 ? 'TOP15 üldseisu järgi' : 'kõik'}</span></div>
           <div class="dash-panel-body">${dashboardSundayRows()}</div>
         </section>
       </div>
     </section>`;
+  restoreDashboardScrollState(scrollState);
 }
 
 function render() {
@@ -726,8 +780,9 @@ function render() {
 
   $('#stageTitle').textContent = sunday ? 'Super Sunday' : stage.title;
   $('#stageSub').innerHTML = sunday ? '' : stageTimingText(stage);
-  const runningCount = filteredDrivers(stage.drivers).filter(driver => ['moving', 'stopped'].includes(driverTrackState(driver))).length;
-  const finishedCount = filteredDrivers(stage.drivers).filter(driver => driverTrackState(driver) === 'finished').length;
+  const dashboardDrivers = dashboard ? dashboardFilteredDrivers(stage.drivers, stage) : filteredDrivers(stage.drivers);
+  const runningCount = dashboardDrivers.filter(driver => ['moving', 'stopped'].includes(driverTrackState(driver))).length;
+  const finishedCount = dashboardDrivers.filter(driver => driverTrackState(driver) === 'finished').length;
   $('#stageStats').innerHTML = dashboard && !sunday
     ? `<span><b>${runningCount}</b> rajal</span><span><b>${finishedCount}</b> finišis</span>`
     : '';
@@ -739,10 +794,19 @@ function render() {
   else if (tab === 'SUPER SUNDAY') renderSundayView();
   else renderInfoView(stage);
 
-  document.querySelectorAll('[data-driver]').forEach(button => {
+  // Sõitja vajutus muudab võrdlussõitjat ainult splitivaates.
+  // Teistes vaadetes ei vii sõitjale vajutamine enam automaatselt SPLIT lehele.
+  document.querySelectorAll('.driver-cell[data-driver]').forEach(button => {
     button.onclick = () => {
       referenceId = button.dataset.driver;
-      tab = 'SPLIT';
+      render();
+    };
+  });
+
+  // Dashboardi SPLITID plokis saab võrdlussõitjat vahetada ilma Dashboardist lahkumata.
+  document.querySelectorAll('.dash-split-driver[data-driver]').forEach(button => {
+    button.onclick = () => {
+      referenceId = button.dataset.driver;
       render();
     };
   });
@@ -754,6 +818,20 @@ async function changeStage(direction) {
   referenceId = null;
   render();
   await refresh(false);
+}
+
+const top15Toggle = $('#top15Toggle');
+if (top15Toggle) {
+  top15Toggle.onclick = () => {
+    dashboardTop15 = !dashboardTop15;
+    localStorage.setItem('ralli-dashboard-top15', dashboardTop15 ? '1' : '0');
+    const stage = stages[stageIndex];
+    const visible = dashboardFilteredDrivers(stage?.drivers || [], stage);
+    if (!visible.some(driver => String(driver.id) === String(referenceId))) {
+      referenceId = visible[0]?.id || null;
+    }
+    render();
+  };
 }
 
 $('#prev').onclick = () => changeStage(-1);

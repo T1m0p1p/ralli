@@ -306,3 +306,21 @@ button, select { font: inherit; }
   .category-button { padding: 4px 7px; }
   .stage-picker h1 { font-size: 13px; max-width: calc(100vw - 90px); }
 }
+
+
+/* v28 — Dashboard TOP15 overall filter */
+.top15-button {
+  border: 1px solid #29292d;
+  border-radius: 5px;
+  background: #070707;
+  color: #77777c;
+  padding: 4px 8px;
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  font-weight: 650;
+}
+.top15-button:hover { color: #d1d1d6; border-color: #3a3a3e; }
+.top15-button.active { color: #fff; border-color: #8e8e93; background: #242427; }
+.top15-button[hidden] { display: none !important; }
+@media (max-width: 899px) { .top15-button { display: none !important; } }

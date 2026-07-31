@@ -1,26 +1,11 @@
-# Ralli Live v26
+# Ralli Live v28
 
-Puhas versioon nelja failiga.
+Puhas nelja failiga versioon.
 
-Desktopi päis on ümber kujundatud:
-- ralli nimi üleval vasakul;
-- kategooriad vasakul otse vajutatavate nuppudena;
-- katse nimi keskel ning eelmise/järgmise katse nupud nime kõrval;
-- katse algusaeg/staatus paremal;
-- Dashboardi varasem dubleeriv ülarida on eemaldatud.
+## v28 muudatus
 
-Failid: `index.html`, `app.js`, `styles.css`, `README.md`.
+Dashboardi kategoorianuppude kõrvale lisatud **TOP15** lüliti.
 
+Kui TOP15 on aktiivne, jäetakse kõigis Dashboardi tabelites alles ainult need sõitjad, kes on valitud kategooria hetke üldarvestuses esimese 15 hulgas. Näiteks **WRC2 + TOP15** kuvab ainult WRC2 üldarvestuse hetke TOP15 sõitjaid.
 
-## v24
-Katse- ja üldseisu ajavahed kuvatakse alates 60 sekundist kujul `+1:04.3`; alla minuti kujul `+42.7`.
-
-
-## v25
-- SPLIT vaates kuvatakse üle 60 sekundi vahed minutite ja sekunditena (nt +1:04.3).
-- Sama vorming kehtib Dashboardi SPLITID plokis.
-
-
-## v26
-
-SPLIT, KATSE ja ÜLDSEIS kasutavad ühist ajavahe formaati: alla 60 s `+42.7`, alates 60 s `+1:04.3`. Lisatud tugevam cache-busting.
+TOP15 valik säilib brauseris ning ei mõjuta KATSE, SPLIT, ÜLDSEIS, SUPER SUNDAY ega INFO eraldi vaateid.
