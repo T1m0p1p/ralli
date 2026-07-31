@@ -1,15 +1,7 @@
-# Ralli Live v6
+# Ralli Live v8
 
 Muudatused:
-- katse nime all kuvatakse algusaeg Eesti aja järgi;
-- poolelioleva katse juures kuvatakse LIVE;
-- lõppenud katse juures kuvatakse LÕPPENUD;
-- tulevase katse juures kuvatakse pöördloendus;
-- pöördloendus uueneb iga sekundi järel;
-- eemaldatud „Võrdlus” tekst.
-
-
-## v7
-- Rakendus täidab nüüd alati kogu ekraani laiuse ja kõrguse.
-- Eemaldatud 480 px laiuse piirang ja lauaarvuti telefoniraam.
-- Horisontaalasendis arvestatakse seadme safe-area servi.
+- Splitivaates jääb sõitja veerg horisontaalsel kerimisel alati nähtavaks.
+- Tulemuste vaated on sisulaiusega: nimi ja aeg paiknevad kohe kõrvuti.
+- Laiemal ekraanil ei venitata tabelit kogu ekraani laiuseks.
+- Uued failinimed väldivad brauseri vana vahemälu kasutamist.
