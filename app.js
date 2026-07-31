@@ -15,7 +15,7 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
-const APP_VERSION = 'v16';
+const APP_VERSION = 'v17';
 const tabs = ['KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
 const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
@@ -432,7 +432,9 @@ function renderStageView(stage) {
 }
 
 function renderSplitView(stage) {
-  const drivers = filteredDrivers(stage.drivers);
+  const drivers = filteredDrivers(stage.drivers)
+    .slice()
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || (a.number ?? 999) - (b.number ?? 999));
   const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
   if (!reference) {
     $('#content').innerHTML = '<p class="empty">Selles kategoorias splitiaegu veel ei ole.</p>';

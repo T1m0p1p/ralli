@@ -1,10 +1,6 @@
-# Ralli Live v16
+Ralli Live v15
 
-Puhastatud versioon. ZIP-i failid tuleb laadida GitHubi repo juurkausta.
+Parandatud auto numbri sidumine telemeetriaga ja splitiveergude laius.
 
-Muudatused:
-- ainult järjekorranumber / auto number on staatuse järgi värviline;
-- sõitja nimi jääb alati valgeks;
-- split- ja INFO-vaate telemeetria kasutab sama värviloogikat;
-- CSS on kirjutatud puhtalt ümber ilma varasemate versioonide ülekirjutuste kihtideta;
-- cache-busting versioon on 16.0.0.
+
+Muudatus v17: SPLIT-vaate sõitjad kuvatakse alati stardijärjekorras; splitiaegade saabumisel nimekiri ümber ei järjestu.
