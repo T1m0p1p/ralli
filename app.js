@@ -15,8 +15,8 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
-const APP_VERSION = 'v17';
-const tabs = ['KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
+const APP_VERSION = 'v18';
+const tabs = ['DASHBOARD', 'KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
 const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
 let stages = [];
@@ -555,11 +555,155 @@ function renderInfoView(stage) {
     </section>`;
 }
 
+function dashboardTrackLabel(driver) {
+  const state = driverTrackState(driver);
+  if (state === 'moving') return 'LIIGUB';
+  if (state === 'stopped') return 'SEISAB';
+  if (state === 'finished') return 'FIN';
+  return 'OOTAB';
+}
+
+function dashboardStageRows(stage, limit = 8) {
+  const drivers = filteredDrivers(stage.drivers)
+    .filter(driver => Number.isFinite(driver.stageTimeMs))
+    .sort((a, b) => a.stageTimeMs - b.stageTimeMs)
+    .slice(0, limit);
+  const leader = drivers[0]?.stageTimeMs;
+  if (!drivers.length) return '<p class="dash-empty">Katseaegu veel ei ole.</p>';
+  return drivers.map((driver, index) => `
+    <button class="dash-result-row" data-driver="${driver.id}">
+      <span class="dash-pos">${index + 1}</span>
+      <span class="dash-driver">${driver.name}</span>
+      <span class="dash-time">${index === 0 ? formatTimeMs(driver.stageTimeMs) : formatDeltaMs(driver.stageTimeMs - leader)}</span>
+    </button>`).join('');
+}
+
+function dashboardOverallRows(stage, limit = 10) {
+  const drivers = filteredDrivers(stage.drivers)
+    .filter(driver => Number.isFinite(driver.overallTimeMs))
+    .sort((a, b) => a.overallTimeMs - b.overallTimeMs)
+    .slice(0, limit);
+  const leader = drivers[0]?.overallTimeMs;
+  if (!drivers.length) return '<p class="dash-empty">Üldseisu veel ei ole.</p>';
+  return drivers.map((driver, index) => `
+    <button class="dash-result-row" data-driver="${driver.id}">
+      <span class="dash-pos">${index + 1}</span>
+      <span class="dash-driver">${driver.name}</span>
+      <span class="dash-time">${index === 0 ? formatTimeMs(driver.overallTimeMs) : formatDeltaMs(driver.overallTimeMs - leader)}</span>
+    </button>`).join('');
+}
+
+function dashboardLiveRows(stage, limit = 9) {
+  const drivers = filteredDrivers(stage.drivers)
+    .slice()
+    .sort((a, b) => {
+      const states = { moving: 0, stopped: 1, finished: 2, 'not-started': 3 };
+      return (states[driverTrackState(a)] ?? 9) - (states[driverTrackState(b)] ?? 9) || (a.order ?? 999) - (b.order ?? 999);
+    })
+    .slice(0, limit);
+  if (!drivers.length) return '<p class="dash-empty">Live-andmeid ei ole.</p>';
+  return drivers.map(driver => {
+    const live = telemetryFor(driver);
+    const state = driverTrackState(driver);
+    return `<button class="dash-live-row" data-driver="${driver.id}">
+      <span class="track-indicator track-${state}">#${driver.number || ''}</span>
+      <span class="dash-driver">${driver.name}</span>
+      <span class="dash-live-state">${dashboardTrackLabel(driver)}</span>
+      <span class="dash-speed">${formatTelemetryNumber(live?.speed, { decimals: 0, suffix: ' km/h', min: 0 })}</span>
+      <span class="dash-km">${formatTelemetryNumber(live?.kms, { decimals: 1, suffix: ' km', min: 0 })}</span>
+    </button>`;
+  }).join('');
+}
+
+function dashboardSundayRows(limit = 6) {
+  const drivers = filteredDrivers(sundayResults);
+  const maxCompleted = Math.max(0, ...drivers.map(driver => driver.completedStages));
+  const classified = drivers.filter(driver => driver.completedStages === maxCompleted && maxCompleted > 0)
+    .sort((a, b) => a.totalTimeMs - b.totalTimeMs)
+    .slice(0, limit);
+  const leader = classified[0]?.totalTimeMs;
+  if (!classified.length) return '<p class="dash-empty">Super Sunday aegu veel ei ole.</p>';
+  return classified.map((driver, index) => `
+    <button class="dash-result-row compact" data-driver="${driver.id}">
+      <span class="dash-pos">${index + 1}</span>
+      <span class="dash-driver">${driver.name}</span>
+      <span class="dash-time">${index === 0 ? formatTimeMs(driver.totalTimeMs) : formatDeltaMs(driver.totalTimeMs - leader)}</span>
+    </button>`).join('');
+}
+
+function renderDashboardSplit(stage) {
+  const drivers = filteredDrivers(stage.drivers)
+    .slice()
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || Number(a.number || 999) - Number(b.number || 999));
+  const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
+  if (!reference || !drivers.length) return '<p class="dash-empty">Splitiaegu veel ei ole.</p>';
+
+  const visibleDrivers = drivers.slice(0, 12);
+  const points = stage.splitPoints;
+  let html = `<div class="dash-split-grid" style="--split-cols:${Math.max(1, points.length + 1)}"><div class="dash-split-head driver-head">SÕITJA</div>`;
+  html += points.map((point, index) => `<div class="dash-split-head"><span>S${index + 1}</span><small>${Number(point.distance || 0).toFixed(1)} km</small></div>`).join('');
+  html += '<div class="dash-split-head"><span>FIN</span></div>';
+
+  visibleDrivers.forEach((driver, index) => {
+    const selected = driver.id === reference.id;
+    const state = driverTrackState(driver);
+    html += `<button class="dash-split-driver ${selected ? 'selected' : ''}" data-driver="${driver.id}"><span class="track-indicator track-${state}">${index + 1}</span><strong>${driver.name}</strong></button>`;
+    driver.splits.forEach((splitMs, splitIndex) => {
+      const refMs = reference.splits[splitIndex];
+      const difference = Number.isFinite(splitMs) && Number.isFinite(refMs) ? splitMs - refMs : null;
+      html += `<div class="dash-split-cell ${selected ? 'reference' : deltaClass(difference)}">${selected ? formatTimeMs(splitMs) : formatDeltaMs(difference)}</div>`;
+    });
+    const finishDifference = Number.isFinite(driver.stageTimeMs) && Number.isFinite(reference.stageTimeMs)
+      ? driver.stageTimeMs - reference.stageTimeMs : null;
+    html += `<div class="dash-split-cell ${selected ? 'reference' : deltaClass(finishDifference)}">${selected ? formatTimeMs(driver.stageTimeMs) : formatDeltaMs(finishDifference)}</div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
+function renderDashboardView(stage) {
+  const runningCount = filteredDrivers(stage.drivers).filter(driver => ['moving', 'stopped'].includes(driverTrackState(driver))).length;
+  const finishedCount = filteredDrivers(stage.drivers).filter(driver => driverTrackState(driver) === 'finished').length;
+  const start = formatStageStart(stage);
+
+  $('#content').innerHTML = `
+    <section class="dashboard-view">
+      <div class="dash-topline">
+        <div><span class="dash-kicker">${config.eventName}</span><strong>${stage.title}</strong></div>
+        <div class="dash-stage-status">${stageTimingText(stage)}</div>
+        <div class="dash-stats"><span><b>${runningCount}</b> rajal</span><span><b>${finishedCount}</b> finišis</span><span>${start}</span></div>
+      </div>
+      <div class="dashboard-grid">
+        <section class="dash-panel dash-splits">
+          <div class="dash-panel-head"><h2>SPLITID</h2><span>stardijärjekord · kliki sõitjal võrdluseks</span></div>
+          <div class="dash-panel-body split-body">${renderDashboardSplit(stage)}</div>
+        </section>
+        <section class="dash-panel dash-stage">
+          <div class="dash-panel-head"><h2>KATSE</h2><span>TOP 8</span></div>
+          <div class="dash-panel-body">${dashboardStageRows(stage)}</div>
+        </section>
+        <section class="dash-panel dash-overall">
+          <div class="dash-panel-head"><h2>ÜLDSEIS</h2><span>TOP 10</span></div>
+          <div class="dash-panel-body">${dashboardOverallRows(stage)}</div>
+        </section>
+        <section class="dash-panel dash-live">
+          <div class="dash-panel-head"><h2>LIVE</h2><span>staatus · kiirus · km</span></div>
+          <div class="dash-panel-body">${dashboardLiveRows(stage)}</div>
+        </section>
+        <section class="dash-panel dash-sunday">
+          <div class="dash-panel-head"><h2>SUPER SUNDAY</h2><span>TOP 6</span></div>
+          <div class="dash-panel-body">${dashboardSundayRows()}</div>
+        </section>
+      </div>
+    </section>`;
+}
+
 function render() {
   renderTabs();
   renderCategorySelect();
   const stage = stages[stageIndex];
   const sunday = tab === 'SUPER SUNDAY';
+  const dashboard = tab === 'DASHBOARD';
   $('#prev').style.visibility = sunday ? 'hidden' : 'visible';
   $('#next').style.visibility = sunday ? 'hidden' : 'visible';
 
@@ -570,10 +714,11 @@ function render() {
     return;
   }
 
-  $('#stageTitle').textContent = sunday ? 'Super Sunday' : (tab === 'INFO' ? 'Live info' : stage.title);
-  $('#stageSub').innerHTML = sunday ? config.eventName : (tab === 'INFO' ? stage.title : stageTimingText(stage));
+  $('#stageTitle').textContent = dashboard ? 'Dashboard' : (sunday ? 'Super Sunday' : (tab === 'INFO' ? 'Live info' : stage.title));
+  $('#stageSub').innerHTML = dashboard ? `${stage.title} · ${stageTimingText(stage)}` : (sunday ? config.eventName : (tab === 'INFO' ? stage.title : stageTimingText(stage)));
 
-  if (tab === 'KATSE') renderStageView(stage);
+  if (tab === 'DASHBOARD') renderDashboardView(stage);
+  else if (tab === 'KATSE') renderStageView(stage);
   else if (tab === 'SPLIT') renderSplitView(stage);
   else if (tab === 'ÜLDSEIS') renderOverallView(stage);
   else if (tab === 'SUPER SUNDAY') renderSundayView();
@@ -611,11 +756,13 @@ refresh(true);
 setInterval(() => refresh(false), 10000);
 setInterval(async () => {
   await loadTelemetry();
-  if (tab === 'SPLIT' || tab === 'INFO') render();
+  if (tab === 'SPLIT' || tab === 'INFO' || tab === 'DASHBOARD') render();
 }, 5000);
 setInterval(() => {
   if (tab !== 'SUPER SUNDAY' && stages[stageIndex]) {
-    $('#stageSub').innerHTML = stageTimingText(stages[stageIndex]);
+    $('#stageSub').innerHTML = tab === 'DASHBOARD'
+      ? `${stages[stageIndex].title} · ${stageTimingText(stages[stageIndex])}`
+      : stageTimingText(stages[stageIndex]);
   }
 }, 1000);
 document.addEventListener('visibilitychange', () => {

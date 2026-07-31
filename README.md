@@ -1,6 +1,3 @@
-Ralli Live v15
+# Ralli Live v18
 
-Parandatud auto numbri sidumine telemeetriaga ja splitiveergude laius.
-
-
-Muudatus v17: SPLIT-vaate sõitjad kuvatakse alati stardijärjekorras; splitiaegade saabumisel nimekiri ümber ei järjestu.
+Lisatud arvuti jaoks Dashboard-vaade. Dashboard koondab ühele ekraanile aktiivse katse splitid, katse TOP 8, üldseisu TOP 10, live telemeetria ning Super Sunday TOP 6. Mobiilis Dashboardi sakk on peidetud ja senised vaated jäävad samaks.

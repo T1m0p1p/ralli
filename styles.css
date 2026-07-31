@@ -116,3 +116,77 @@ button, select { font: inherit; }
   .top-tabs { padding-top: max(4px, env(safe-area-inset-top)); }
   .phone-app { padding-bottom: max(4px, env(safe-area-inset-bottom)); }
 }
+
+/* Desktop dashboard */
+.dashboard-view { display: none; }
+
+@media (min-width: 900px) {
+  html, body { height: 100%; overflow: hidden; }
+  .phone-app { height: 100vh; min-height: 0; padding: 0; }
+  .top-tabs { grid-template-columns: repeat(6, max-content); justify-content: center; gap: 18px; padding-top: 4px; height: 38px; }
+  .top-tabs button { padding: 9px 4px 8px; font-size: 10px !important; }
+  .stage-head { grid-template-columns: 36px minmax(260px, 540px) 36px; justify-content: center; padding: 5px 0 3px; min-height: 44px; }
+  .stage-head h1 { font-size: 14px; }
+  .stage-head p { font-size: 9px; margin-top: 2px; }
+  .icon-button { font-size: 24px; padding: 2px; }
+  .filter-bar { position: absolute; top: 43px; right: 18px; z-index: 10; padding: 0; }
+  #content { min-height: 0; flex: 1; overflow: auto; }
+  .refresh-bar { flex: 0 0 24px; min-height: 24px; padding: 0; border-top: 1px solid var(--line); }
+
+  .dashboard-view { display: flex; flex-direction: column; height: 100%; min-height: 0; padding: 6px 10px 8px; overflow: hidden; }
+  .dash-topline { flex: 0 0 38px; display: grid; grid-template-columns: 1.2fr 1fr 1.2fr; align-items: center; gap: 12px; border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; margin-bottom: 7px; background: #050505; }
+  .dash-topline > div:first-child { min-width: 0; display: flex; align-items: baseline; gap: 9px; }
+  .dash-topline strong { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .dash-kicker { color: #6e6e73; font-size: 8px; text-transform: uppercase; letter-spacing: .07em; white-space: nowrap; }
+  .dash-stage-status { text-align: center; font-size: 10px; color: #a1a1a6; }
+  .dash-stats { display: flex; justify-content: flex-end; gap: 14px; color: #8e8e93; font-size: 9px; white-space: nowrap; }
+  .dash-stats b { color: #fff; font-size: 11px; }
+
+  .dashboard-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(215px, .62fr) minmax(235px, .72fr); grid-template-rows: minmax(0, 1.12fr) minmax(0, .88fr); grid-template-areas: "splits stage overall" "splits live sunday"; gap: 7px; }
+  .dash-panel { min-width: 0; min-height: 0; border: 1px solid var(--line); border-radius: 8px; background: #030303; overflow: hidden; display: flex; flex-direction: column; }
+  .dash-splits { grid-area: splits; }
+  .dash-stage { grid-area: stage; }
+  .dash-overall { grid-area: overall; }
+  .dash-live { grid-area: live; }
+  .dash-sunday { grid-area: sunday; }
+  .dash-panel-head { flex: 0 0 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid var(--line); }
+  .dash-panel-head h2 { margin: 0; font-size: 9px; letter-spacing: .08em; font-weight: 700; }
+  .dash-panel-head span { color: #5f5f64; font-size: 8px; white-space: nowrap; }
+  .dash-panel-body { flex: 1; min-height: 0; overflow: hidden; padding: 4px 7px; }
+  .dash-panel-body.split-body { padding: 0; }
+  .dash-empty { margin: 12px 6px; color: #6e6e73; font-size: 10px; }
+
+  .dash-result-row { width: 100%; display: grid; grid-template-columns: 22px minmax(0, 1fr) max-content; align-items: center; gap: 5px; border: 0; background: transparent; color: #fff; padding: 3px 1px; min-height: 22px; text-align: left; }
+  .dash-result-row.compact { min-height: 20px; padding: 2px 1px; }
+  .dash-pos { color: #6e6e73; font-size: 9px; font-variant-numeric: tabular-nums; }
+  .dash-driver { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 10px; }
+  .dash-time { font-size: 10px; font-variant-numeric: tabular-nums; text-align: right; }
+
+  .dash-live-row { width: 100%; display: grid; grid-template-columns: 34px minmax(70px, 1fr) 46px 58px 55px; align-items: center; gap: 4px; border: 0; background: transparent; color: #fff; padding: 3px 1px; min-height: 22px; text-align: left; }
+  .dash-live-row .track-indicator { width: auto; font-size: 9px; }
+  .dash-live-state { color: #77777c; font-size: 8px; text-align: center; }
+  .dash-speed, .dash-km { text-align: right; font-size: 9px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+  .dash-split-grid { display: grid; grid-template-columns: minmax(118px, 1.25fr) repeat(var(--split-cols), minmax(52px, 1fr)); align-items: center; width: 100%; height: 100%; align-content: start; font-variant-numeric: tabular-nums; }
+  .dash-split-head { min-width: 0; height: 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; border-bottom: 1px solid var(--line); color: #d1d1d6; font-size: 9px; }
+  .dash-split-head small { margin-top: 1px; color: #55555a; font-size: 7px; }
+  .dash-split-head.driver-head { align-items: flex-start; padding-left: 7px; color: #6e6e73; }
+  .dash-split-driver { min-width: 0; height: 25px; display: flex; align-items: center; gap: 5px; border: 0; background: transparent; color: #fff; text-align: left; padding: 0 6px; border-bottom: 1px solid rgba(255,255,255,.025); overflow: hidden; }
+  .dash-split-driver strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 9px; font-weight: 500; }
+  .dash-split-driver.selected strong { font-weight: 750; }
+  .dash-split-driver .track-indicator { width: 18px; flex: 0 0 18px; font-size: 9px; }
+  .dash-split-cell { min-width: 0; height: 25px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid rgba(255,255,255,.025); padding: 0 2px; overflow: hidden; white-space: nowrap; font-size: 9px; font-weight: 650; }
+  .dash-split-cell.reference { color: #fff; }
+  .dash-split-cell.gain { color: var(--green); }
+  .dash-split-cell.loss { color: var(--red); }
+  .dash-split-cell.neutral { color: #66666b; }
+
+  /* The normal views stay compact on desktop as well. */
+  .split-wrap, .info-wrap { max-width: 1180px; margin: 0 auto; }
+  .list-view, .overall-view, .sunday-view { margin: 0 auto; }
+}
+
+@media (max-width: 899px) {
+  .top-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+  .top-tabs button[data-tab="DASHBOARD"] { display: none; }
+}
