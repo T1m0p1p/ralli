@@ -15,6 +15,7 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
+const APP_VERSION = 'v16';
 const tabs = ['KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
 const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
@@ -206,7 +207,7 @@ function driverTrackState(driver) {
   if (!driverHasStarted(driver)) return 'not-started';
 
   const live = telemetryFor(driver);
-  if (/competing/i.test(String(live?.status || ''))) {
+  if (/^(competing|ok)$/i.test(String(live?.status || '').trim())) {
     return Number(live?.speed) > 0 ? 'moving' : 'stopped';
   }
   return 'not-started';
@@ -447,7 +448,7 @@ function renderSplitView(stage) {
   drivers.forEach((driver, index) => {
     const selected = driver.id === reference.id;
     const trackState = driverTrackState(driver);
-    html += `<button class="driver-cell ${selected ? 'selected' : ''} track-${trackState}" data-driver="${driver.id}"><span>${index + 1}</span><strong>${driver.name}</strong></button>`;
+    html += `<button class="driver-cell ${selected ? 'selected' : ''}" data-driver="${driver.id}"><span class="track-indicator track-${trackState}">${index + 1}</span><strong>${driver.name}</strong></button>`;
 
     driver.splits.forEach((splitMs, splitIndex) => {
       const referenceMs = reference.splits[splitIndex];
@@ -539,8 +540,8 @@ function renderInfoView(stage) {
           const stageDriver = stage.drivers.find(item => item.id === driver.id) || driver;
           const trackState = driverTrackState(stageDriver);
           return `
-            <button class="info-driver sticky-info track-${trackState}" data-driver="${driver.id}">
-              <span>#${driver.number}</span><strong>${driver.name}</strong>
+            <button class="info-driver sticky-info" data-driver="${driver.id}">
+              <span class="track-indicator track-${trackState}">#${driver.number}</span><strong>${driver.name}</strong>
             </button>
             <div class="info-cell">${formatTelemetryNumber(live?.speed, { decimals: 0, suffix: ' km/h', min: 0 })}</div>
             <div class="info-cell">${formatTelemetryNumber(live?.kms, { decimals: 1, suffix: ' km', min: 0 })}</div>
