@@ -1,0 +1,92 @@
+:root{font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","Segoe UI",sans-serif;color:#f5f5f7;background:#000;--red:#ff453a;--green:#30d158;--muted:#8e8e93;--line:#1c1c1e}*{box-sizing:border-box}html,body{margin:0;min-height:100%;background:#000}button,select{font:inherit}.app-shell{min-height:100dvh;display:flex;justify-content:center;background:#000}.phone-app{width:min(100%,480px);min-height:100dvh;background:#000;display:flex;flex-direction:column;padding-bottom:max(14px,env(safe-area-inset-bottom))}.top-tabs{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--line);padding-top:max(14px,env(safe-area-inset-top))}.top-tabs button{position:relative;border:0;background:transparent;color:#8e8e93;padding:15px 2px 13px;font-size:12px;letter-spacing:.01em;white-space:nowrap}.top-tabs button.active{color:#fff;font-weight:650}.top-tabs button.active:after{content:"";position:absolute;left:12%;right:12%;bottom:-1px;height:1px;background:#fff}.stage-head{display:grid;grid-template-columns:40px 1fr 40px;align-items:center;text-align:center;padding:10px 2px 7px}.stage-head h1{margin:0;font-size:17px;font-weight:500}.stage-head p{margin:5px 0 0;font-size:12px;color:#a1a1a6}.stage-head strong{color:#fff;font-weight:650}.icon-button{border:0;background:transparent;color:#8e8e93;padding:7px;font-size:29px;font-weight:200}.filter-bar{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:0 14px 7px;color:#6e6e73;font-size:11px}.filter-bar select{appearance:none;border:0;border-bottom:1px solid #3a3a3c;border-radius:0;background:transparent;color:#f5f5f7;padding:3px 18px 3px 4px;font-size:12px;background-image:linear-gradient(45deg,transparent 50%,#8e8e93 50%),linear-gradient(135deg,#8e8e93 50%,transparent 50%);background-position:calc(100% - 8px) 8px,calc(100% - 4px) 8px;background-size:4px 4px,4px 4px;background-repeat:no-repeat}.filter-bar option{background:#1c1c1e;color:#fff}.list-view{position:relative;padding:5px 16px 24px}.live-label{position:absolute;right:17px;top:-4px;color:var(--green);font-size:11px}.result-row{width:100%;border:0;background:transparent;color:#f5f5f7;display:grid;grid-template-columns:30px 1fr auto;gap:6px;align-items:center;padding:6px 0;font-size:14px;text-align:left}.pos{color:#f5f5f7}.driver{min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}.time{font-variant-numeric:tabular-nums;text-align:right}.split-wrap{overflow-x:auto;padding:2px 10px 14px}.split-table{min-width:100%;width:max-content;display:grid;align-items:center;font-variant-numeric:tabular-nums}.split-header{min-height:42px;display:flex;flex-direction:column;justify-content:center;align-items:center;color:#f5f5f7;font-size:12px}.split-header small{color:#6e6e73;font-size:9px;margin-top:3px}.driver-cell{height:32px;border:0;background:transparent;color:#d1d1d6;display:flex;align-items:center;gap:7px;padding:0 3px;text-align:left;white-space:nowrap}.driver-cell span{width:14px;color:#8e8e93;font-size:11px}.driver-cell strong{font-size:12px;font-weight:400}.driver-cell.selected strong{color:#fff;font-weight:700}.split-cell{height:32px;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:620}.split-cell.reference{color:#fff;font-weight:700}.split-cell.gain{color:var(--green)}.split-cell.loss{color:var(--red)}.split-cell.neutral{color:#8e8e93}.hint{color:#6e6e73;text-align:center;font-size:10px;margin:12px 0 2px}.overall-view,.sunday-view{padding:7px 16px 24px}.overall-head,.sunday-head{display:grid;grid-template-columns:1fr 92px 62px;color:#8e8e93;font-size:9px;padding:0 0 5px 36px}.overall-row,.sunday-row{width:100%;border:0;background:transparent;color:#f5f5f7;display:grid;grid-template-columns:30px 1fr 92px 62px;gap:6px;align-items:center;padding:6px 0;text-align:left;font-size:14px}.overall-row .time,.overall-row .gap,.sunday-row .time,.sunday-row .gap{font-variant-numeric:tabular-nums;text-align:right}.overall-row .gap,.sunday-row .gap{color:#d1d1d6}.sunday-note{color:#6e6e73;font-size:10px;text-align:center;margin:5px 0 12px}.refresh-bar{margin-top:auto;display:flex;align-items:center;justify-content:center;gap:8px;color:#6e6e73;font-size:10px;padding-top:8px}.refresh-bar button{border:0;background:transparent;color:#8e8e93}.refresh-bar .live{color:var(--green)}.refresh-bar .error{color:var(--red);max-width:250px;text-align:center}.refresh-bar .loading{color:#d1d1d6}.empty{color:#8e8e93;text-align:center;padding:42px 16px;font-size:12px}@media(max-width:370px){.top-tabs button{font-size:10px}.result-row,.overall-row,.sunday-row{font-size:13px}.split-cell,.driver-cell strong{font-size:11px}}@media(min-width:700px){.app-shell{padding:32px;background:#151515}.phone-app{min-height:820px;max-height:920px;border:1px solid #2c2c2e;border-radius:34px;overflow:hidden;box-shadow:0 24px 80px rgba(0,0,0,.45)}}
+/* v4: forced compact layout; new filename avoids old GitHub Pages/browser cache */
+.top-tabs button{font-size:10px;padding:12px 1px 10px;letter-spacing:0}
+.top-tabs button:last-child{font-size:9px}
+.stage-head{padding:7px 2px 4px}
+.stage-head h1{font-size:15px}
+.stage-head p{margin-top:3px;font-size:10px}
+.filter-bar{padding:0 12px 4px;font-size:10px}
+.filter-bar select{font-size:11px;padding-top:2px;padding-bottom:2px}
+.list-view,.overall-view,.sunday-view{padding-top:2px;padding-bottom:12px}
+.result-row,.overall-row,.sunday-row{padding:3px 0;font-size:12px;line-height:1.15;min-height:24px}
+.result-row{grid-template-columns:24px 1fr auto}
+.overall-row,.sunday-row{grid-template-columns:24px 1fr 82px 56px}
+.overall-head,.sunday-head{grid-template-columns:1fr 82px 56px;padding-left:30px}
+.driver-cell,.split-cell{height:27px}
+.driver-cell strong,.split-cell{font-size:11px}
+.split-header{min-height:35px;font-size:11px}
+.split-header small{font-size:8px;margin-top:1px}
+.split-wrap{padding-top:0;padding-bottom:8px}
+.hint{margin-top:7px}
+.refresh-bar{padding-top:4px;position:relative}
+.version{position:absolute;right:10px;color:#3a3a3c;font-size:8px}
+
+
+/* v7: always fill the complete viewport, including landscape orientation */
+html,
+body {
+  width: 100%;
+  min-width: 100%;
+  height: 100%;
+  min-height: 100%;
+  overflow-x: hidden;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+}
+
+.app-shell {
+  width: 100vw;
+  min-width: 100%;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  justify-content: stretch;
+  padding: 0;
+  background: #000;
+}
+
+.phone-app {
+  width: 100%;
+  max-width: none;
+  min-height: 100vh;
+  min-height: 100svh;
+  min-height: 100dvh;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+@media (min-width: 700px) {
+  .app-shell {
+    padding: 0;
+    background: #000;
+  }
+
+  .phone-app {
+    width: 100%;
+    min-height: 100vh;
+    min-height: 100svh;
+    min-height: 100dvh;
+    max-height: none;
+    border: 0;
+    border-radius: 0;
+    overflow: visible;
+    box-shadow: none;
+  }
+}
+
+@media (orientation: landscape) {
+  .top-tabs {
+    padding-top: max(4px, env(safe-area-inset-top));
+  }
+
+  .phone-app {
+    padding-bottom: max(4px, env(safe-area-inset-bottom));
+  }
+}
