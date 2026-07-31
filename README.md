@@ -1,7 +1,9 @@
-# Ralli Live v8
+# Ralli Live
 
-Muudatused:
-- Splitivaates jääb sõitja veerg horisontaalsel kerimisel alati nähtavaks.
-- Tulemuste vaated on sisulaiusega: nimi ja aeg paiknevad kohe kõrvuti.
-- Laiemal ekraanil ei venitata tabelit kogu ekraani laiuseks.
-- Uued failinimed väldivad brauseri vana vahemälu kasutamist.
+Puhas viimane versioon. GitHub Pagesi jaoks laadi repo juurkausta ainult:
+
+- `index.html`
+- `app.js`
+- `styles.css`
+
+Rakendus sisaldab katse-, split-, üldseisu-, Super Sunday ja INFO-vaateid, kategooriafiltrit, kompaktset paigutust, sticky sõitjanimede veergu ning WRC telemeetriat.

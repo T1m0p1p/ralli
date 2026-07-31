@@ -15,8 +15,8 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
-const tabs = ['KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY'];
-const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3', 'RC4'];
+const tabs = ['KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
+const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
 let stages = [];
 let sundayStageIds = [];
@@ -26,6 +26,9 @@ let entries = new Map();
 let referenceId = null;
 let category = localStorage.getItem('ralli-category') || 'KÕIK';
 let loading = false;
+let telemetry = new Map();
+let telemetryLoading = false;
+const TELEMETRY_URL = 'https://webappsdata.wrc.com/srv/wrc/json/api/liveservice/getData?timeout=5000';
 
 const $ = selector => document.querySelector(selector);
 
@@ -75,16 +78,62 @@ function driverName(entry) {
 function categoryName(entry) {
   const group = entry?.group?.name || '';
   const eventClass = entry?.eventClasses?.[0]?.name || '';
-  if (/rally1/i.test(group) || eventClass === 'RC1') return 'WRC';
-  if (/rally2/i.test(group) || eventClass === 'RC2') return 'WRC2';
-  if (/rally3/i.test(group) || eventClass === 'RC3') return 'WRC3';
+  if (/rally\s*1/i.test(group) || /^RC1$/i.test(eventClass)) return 'WRC';
+  if (/rally\s*2/i.test(group) || /^RC2$/i.test(eventClass)) return 'WRC2';
+  if (/rally\s*3/i.test(group) || /^RC3$/i.test(eventClass)) return 'WRC3';
   if (eventClass) return eventClass.toUpperCase();
   return group.toUpperCase() || 'MUU';
 }
 
 function stageStartTime(stage) {
   const start = (stage.controls || []).find(control => control.type === 'StageStart');
-  return start?.firstCarDueDateTimeLocal || start?.firstCarDueDateTime || null;
+  return start?.firstCarDueDateTimeLocal || (start?.firstCarDueDateTime ? `${start.firstCarDueDateTime}Z` : null) || null;
+}
+
+
+function formatStageStart(stage) {
+  const raw = stageStartTime(stage);
+  if (!raw) return 'Algusaeg puudub';
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return 'Algusaeg puudub';
+
+  const parts = new Intl.DateTimeFormat('et-EE', {
+    timeZone: 'Europe/Tallinn',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZoneName: 'short'
+  }).formatToParts(date);
+  const value = type => parts.find(part => part.type === type)?.value || '';
+  const zone = value('timeZoneName').replace('GMT+2', 'EET').replace('GMT+3', 'EEST') || 'Eesti aeg';
+  return `${value('hour')}:${value('minute')} ${zone}`;
+}
+
+function formatCountdown(milliseconds) {
+  const totalMinutes = Math.max(0, Math.ceil(milliseconds / 60000));
+  if (totalMinutes < 1) return 'Algab kohe';
+  if (totalMinutes < 60) return `Algab ${totalMinutes} min pärast`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (!minutes) return `Algab ${hours} h pärast`;
+  return `Algab ${hours} h ${minutes} min pärast`;
+}
+
+function stageTimingText(stage) {
+  const raw = stageStartTime(stage);
+  const start = raw ? new Date(raw) : null;
+  const now = Date.now();
+  const status = String(stage.status || '');
+  const running = /running|inprogress/i.test(status);
+  const completed = /completed|finished/i.test(status);
+  const time = formatStageStart(stage);
+
+  if (running) return `${time} · <strong class="status-live">LIVE</strong>`;
+  if (completed) return `${time} · LÕPPENUD`;
+  if (start && !Number.isNaN(start.getTime()) && start.getTime() > now) {
+    return `${time} · ${formatCountdown(start.getTime() - now)}`;
+  }
+  return time;
 }
 
 function pickInitialStageIndex() {
@@ -106,13 +155,52 @@ function pickInitialStageIndex() {
 }
 
 function availableCategories() {
-  const found = new Set([...entries.values()].map(entry => entry.category));
-  return categoryOrder.filter(item => item === 'KÕIK' || found.has(item))
-    .concat([...found].filter(item => !categoryOrder.includes(item)).sort());
+  const found = new Set([...entries.values()].map(entry => entry.category).filter(Boolean));
+  const fixed = [...categoryOrder];
+  const extras = [...found].filter(item => !fixed.includes(item) && item !== 'MUU').sort();
+  return fixed.concat(extras);
 }
 
 function filteredDrivers(drivers) {
   return category === 'KÕIK' ? drivers : drivers.filter(driver => driver.category === category);
+}
+
+function normalizeCarNumber(value) {
+  const text = String(value ?? '').trim();
+  const numeric = text.replace(/^0+/, '');
+  return numeric || '0';
+}
+
+function telemetryFor(driver) {
+  return telemetry.get(normalizeCarNumber(driver.number)) || null;
+}
+
+function driverTrackState(driver) {
+  if (Number.isFinite(driver.stageTimeMs)) return 'finished';
+  const live = telemetryFor(driver);
+  if (/competing/i.test(String(live?.status || ''))) {
+    return Number(live?.speed) > 0 ? 'moving' : 'stopped';
+  }
+  return 'not-started';
+}
+
+function displayTelemetryStatus(driver, live) {
+  if (Number.isFinite(driver.stageTimeMs)) return 'Finished';
+  return live?.status || 'Not started';
+}
+
+async function loadTelemetry() {
+  if (telemetryLoading) return;
+  telemetryLoading = true;
+  try {
+    const data = await getJSON(TELEMETRY_URL);
+    const rows = Array.isArray(data?._entries) ? data._entries : [];
+    telemetry = new Map(rows.map(row => [normalizeCarNumber(row.name), row]));
+  } catch (error) {
+    console.warn('Telemeetria laadimine ebaõnnestus:', error);
+  } finally {
+    telemetryLoading = false;
+  }
 }
 
 async function loadBaseData() {
@@ -250,7 +338,7 @@ async function refresh(reloadBase = false) {
   setStatus('Laen…', 'loading');
   try {
     if (reloadBase || !stages.length) await loadBaseData();
-    await Promise.all([loadCurrentStage(), loadSundayResults()]);
+    await Promise.all([loadCurrentStage(), loadSundayResults(), loadTelemetry()]);
     setStatus(`LIVE · ${new Date().toLocaleTimeString('et-EE', {
       hour: '2-digit', minute: '2-digit', second: '2-digit'
     })}`, 'live');
@@ -308,14 +396,15 @@ function renderSplitView(stage) {
   }
 
   const columns = stage.splitPoints.length + 2;
-  let html = `<section class="split-wrap"><div class="split-table" style="grid-template-columns:minmax(100px,1.25fr) repeat(${columns - 1},minmax(56px,.8fr))"><div></div>`;
+  let html = `<section class="split-wrap"><div class="split-table" style="grid-template-columns:132px repeat(${columns - 1},max-content)"><div></div>`;
   html += stage.splitPoints.map((point, index) => `
     <div class="split-header"><span>S${index + 1}</span><small>${Number(point.distance || 0).toFixed(2)} km</small></div>`).join('');
   html += '<div class="split-header"><span>FIN</span></div>';
 
   drivers.forEach((driver, index) => {
     const selected = driver.id === reference.id;
-    html += `<button class="driver-cell ${selected ? 'selected' : ''}" data-driver="${driver.id}"><span>${index + 1}</span><strong>${driver.name}</strong></button>`;
+    const trackState = driverTrackState(driver);
+    html += `<button class="driver-cell ${selected ? 'selected' : ''} track-${trackState}" data-driver="${driver.id}"><span>${index + 1}</span><strong>${driver.name}</strong></button>`;
 
     driver.splits.forEach((splitMs, splitIndex) => {
       const referenceMs = reference.splits[splitIndex];
@@ -370,6 +459,44 @@ function renderSundayView() {
     </section>`;
 }
 
+function formatTelemetryValue(value, suffix = '') {
+  if (value === null || value === undefined || value === '') return '—';
+  const numeric = Number(value);
+  if (Number.isFinite(numeric)) return `${numeric}${suffix}`;
+  return `${value}${suffix}`;
+}
+
+function renderInfoView(stage) {
+  const drivers = filteredDrivers([...entries.values()])
+    .sort((a, b) => a.order - b.order);
+
+  $('#content').innerHTML = `
+    <section class="info-wrap">
+      <div class="info-table">
+        <div class="info-head sticky-info">SÕITJA</div>
+        <div class="info-head">KIIRUS</div>
+        <div class="info-head">KM</div>
+        <div class="info-head">STAATUS</div>
+        <div class="info-head">KÄIK</div>
+        <div class="info-head">GAAS</div>
+        ${drivers.map(driver => {
+          const live = telemetryFor(driver);
+          const stageDriver = stage.drivers.find(item => item.id === driver.id) || driver;
+          const trackState = driverTrackState(stageDriver);
+          return `
+            <button class="info-driver sticky-info track-${trackState}" data-driver="${driver.id}">
+              <span>#${driver.number}</span><strong>${driver.name}</strong>
+            </button>
+            <div class="info-cell">${formatTelemetryValue(live?.speed, ' km/h')}</div>
+            <div class="info-cell">${formatTelemetryValue(live?.kms, ' km')}</div>
+            <div class="info-cell status-cell">${displayTelemetryStatus(stageDriver, live)}</div>
+            <div class="info-cell">${formatTelemetryValue(live?.gear)}</div>
+            <div class="info-cell">${formatTelemetryValue(live?.throttle, '%')}</div>`;
+        }).join('')}
+      </div>
+    </section>`;
+}
+
 function render() {
   renderTabs();
   renderCategorySelect();
@@ -385,21 +512,14 @@ function render() {
     return;
   }
 
-  const drivers = filteredDrivers(stage.drivers);
-  const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
-  $('#stageTitle').textContent = sunday ? 'Super Sunday' : stage.title;
-  $('#stageSub').innerHTML = sunday
-    ? config.eventName
-    : tab === 'KATSE'
-      ? `${Number(stage.distance || 0).toFixed(2)} km · ${stage.status || ''}`
-      : tab === 'SPLIT' && reference
-        ? `Võrdlus: <strong>${reference.name.toUpperCase()}</strong>`
-        : config.eventName;
+  $('#stageTitle').textContent = sunday ? 'Super Sunday' : (tab === 'INFO' ? 'Live info' : stage.title);
+  $('#stageSub').innerHTML = sunday ? config.eventName : (tab === 'INFO' ? stage.title : stageTimingText(stage));
 
   if (tab === 'KATSE') renderStageView(stage);
   else if (tab === 'SPLIT') renderSplitView(stage);
   else if (tab === 'ÜLDSEIS') renderOverallView(stage);
-  else renderSundayView();
+  else if (tab === 'SUPER SUNDAY') renderSundayView();
+  else renderInfoView(stage);
 
   document.querySelectorAll('[data-driver]').forEach(button => {
     button.onclick = () => {
@@ -431,6 +551,15 @@ $('#category').onchange = event => {
 render();
 refresh(true);
 setInterval(() => refresh(false), 10000);
+setInterval(async () => {
+  await loadTelemetry();
+  if (tab === 'SPLIT' || tab === 'INFO') render();
+}, 5000);
+setInterval(() => {
+  if (tab !== 'SUPER SUNDAY' && stages[stageIndex]) {
+    $('#stageSub').innerHTML = stageTimingText(stages[stageIndex]);
+  }
+}, 1000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) refresh(false);
 });
