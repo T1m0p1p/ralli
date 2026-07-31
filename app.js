@@ -563,11 +563,10 @@ function dashboardTrackLabel(driver) {
   return 'OOTAB';
 }
 
-function dashboardStageRows(stage, limit = 8) {
+function dashboardStageRows(stage) {
   const drivers = filteredDrivers(stage.drivers)
     .filter(driver => Number.isFinite(driver.stageTimeMs))
-    .sort((a, b) => a.stageTimeMs - b.stageTimeMs)
-    .slice(0, limit);
+    .sort((a, b) => a.stageTimeMs - b.stageTimeMs);
   const leader = drivers[0]?.stageTimeMs;
   if (!drivers.length) return '<p class="dash-empty">Katseaegu veel ei ole.</p>';
   return drivers.map((driver, index) => `
@@ -578,11 +577,10 @@ function dashboardStageRows(stage, limit = 8) {
     </button>`).join('');
 }
 
-function dashboardOverallRows(stage, limit = 10) {
+function dashboardOverallRows(stage) {
   const drivers = filteredDrivers(stage.drivers)
     .filter(driver => Number.isFinite(driver.overallTimeMs))
-    .sort((a, b) => a.overallTimeMs - b.overallTimeMs)
-    .slice(0, limit);
+    .sort((a, b) => a.overallTimeMs - b.overallTimeMs);
   const leader = drivers[0]?.overallTimeMs;
   if (!drivers.length) return '<p class="dash-empty">Üldseisu veel ei ole.</p>';
   return drivers.map((driver, index) => `
@@ -593,14 +591,13 @@ function dashboardOverallRows(stage, limit = 10) {
     </button>`).join('');
 }
 
-function dashboardLiveRows(stage, limit = 9) {
+function dashboardLiveRows(stage) {
   const drivers = filteredDrivers(stage.drivers)
     .slice()
     .sort((a, b) => {
       const states = { moving: 0, stopped: 1, finished: 2, 'not-started': 3 };
       return (states[driverTrackState(a)] ?? 9) - (states[driverTrackState(b)] ?? 9) || (a.order ?? 999) - (b.order ?? 999);
-    })
-    .slice(0, limit);
+    });
   if (!drivers.length) return '<p class="dash-empty">Live-andmeid ei ole.</p>';
   return drivers.map(driver => {
     const live = telemetryFor(driver);
@@ -615,12 +612,11 @@ function dashboardLiveRows(stage, limit = 9) {
   }).join('');
 }
 
-function dashboardSundayRows(limit = 6) {
+function dashboardSundayRows() {
   const drivers = filteredDrivers(sundayResults);
   const maxCompleted = Math.max(0, ...drivers.map(driver => driver.completedStages));
   const classified = drivers.filter(driver => driver.completedStages === maxCompleted && maxCompleted > 0)
-    .sort((a, b) => a.totalTimeMs - b.totalTimeMs)
-    .slice(0, limit);
+    .sort((a, b) => a.totalTimeMs - b.totalTimeMs);
   const leader = classified[0]?.totalTimeMs;
   if (!classified.length) return '<p class="dash-empty">Super Sunday aegu veel ei ole.</p>';
   return classified.map((driver, index) => `
@@ -638,7 +634,7 @@ function renderDashboardSplit(stage) {
   const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
   if (!reference || !drivers.length) return '<p class="dash-empty">Splitiaegu veel ei ole.</p>';
 
-  const visibleDrivers = drivers.slice(0, 12);
+  const visibleDrivers = drivers;
   const points = stage.splitPoints;
   let html = `<div class="dash-split-grid" style="--split-cols:${Math.max(1, points.length + 1)}"><div class="dash-split-head driver-head">SÕITJA</div>`;
   html += points.map((point, index) => `<div class="dash-split-head"><span>S${index + 1}</span><small>${Number(point.distance || 0).toFixed(1)} km</small></div>`).join('');
@@ -679,11 +675,11 @@ function renderDashboardView(stage) {
           <div class="dash-panel-body split-body">${renderDashboardSplit(stage)}</div>
         </section>
         <section class="dash-panel dash-stage">
-          <div class="dash-panel-head"><h2>KATSE</h2><span>TOP 8</span></div>
+          <div class="dash-panel-head"><h2>KATSE</h2><span>kõik</span></div>
           <div class="dash-panel-body">${dashboardStageRows(stage)}</div>
         </section>
         <section class="dash-panel dash-overall">
-          <div class="dash-panel-head"><h2>ÜLDSEIS</h2><span>TOP 10</span></div>
+          <div class="dash-panel-head"><h2>ÜLDSEIS</h2><span>kõik</span></div>
           <div class="dash-panel-body">${dashboardOverallRows(stage)}</div>
         </section>
         <section class="dash-panel dash-live">
@@ -691,7 +687,7 @@ function renderDashboardView(stage) {
           <div class="dash-panel-body">${dashboardLiveRows(stage)}</div>
         </section>
         <section class="dash-panel dash-sunday">
-          <div class="dash-panel-head"><h2>SUPER SUNDAY</h2><span>TOP 6</span></div>
+          <div class="dash-panel-head"><h2>SUPER SUNDAY</h2><span>kõik</span></div>
           <div class="dash-panel-body">${dashboardSundayRows()}</div>
         </section>
       </div>

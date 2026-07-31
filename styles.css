@@ -152,8 +152,8 @@ button, select { font: inherit; }
   .dash-panel-head { flex: 0 0 28px; display: flex; align-items: center; justify-content: space-between; padding: 0 8px; border-bottom: 1px solid var(--line); }
   .dash-panel-head h2 { margin: 0; font-size: 9px; letter-spacing: .08em; font-weight: 700; }
   .dash-panel-head span { color: #5f5f64; font-size: 8px; white-space: nowrap; }
-  .dash-panel-body { flex: 1; min-height: 0; overflow: hidden; padding: 4px 7px; }
-  .dash-panel-body.split-body { padding: 0; }
+  .dash-panel-body { flex: 1; min-height: 0; overflow-y: auto; overflow-x: hidden; padding: 4px 7px; scrollbar-gutter: stable; }
+  .dash-panel-body.split-body { padding: 0; overflow: auto; }
   .dash-empty { margin: 12px 6px; color: #6e6e73; font-size: 10px; }
 
   .dash-result-row { width: 100%; display: grid; grid-template-columns: 22px minmax(0, 1fr) max-content; align-items: center; gap: 5px; border: 0; background: transparent; color: #fff; padding: 3px 1px; min-height: 22px; text-align: left; }
