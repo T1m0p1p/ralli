@@ -1,9 +1,10 @@
-# Ralli Live
+# Ralli Live v11
 
-Puhas viimane versioon. GitHub Pagesi jaoks laadi repo juurkausta ainult:
+Parandatud sõitjate staatuse värvimine splitivaates.
 
-- `index.html`
-- `app.js`
-- `styles.css`
+- valge: sõitja individuaalne stardiaeg pole saabunud
+- roheline: sõitja on alustanud, status Competing ja speed > 0
+- punane: sõitja on alustanud, status Competing ja speed = 0
+- tumeroheline: katseaeg on olemas
 
-Rakendus sisaldab katse-, split-, üldseisu-, Super Sunday ja INFO-vaateid, kategooriafiltrit, kompaktset paigutust, sticky sõitjanimede veergu ning WRC telemeetriat.
+Stardiaeg loetakse valitud katse StageStart controlTimes.json andmetest.

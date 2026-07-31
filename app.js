@@ -175,8 +175,18 @@ function telemetryFor(driver) {
   return telemetry.get(normalizeCarNumber(driver.number)) || null;
 }
 
+function driverHasStarted(driver) {
+  if (Number.isFinite(driver.stageTimeMs)) return true;
+  if (driver.splits?.some(Number.isFinite)) return true;
+  if (!driver.startDateTime) return false;
+  const startMs = new Date(driver.startDateTime).getTime();
+  return Number.isFinite(startMs) && Date.now() >= startMs;
+}
+
 function driverTrackState(driver) {
   if (Number.isFinite(driver.stageTimeMs)) return 'finished';
+  if (!driverHasStarted(driver)) return 'not-started';
+
   const live = telemetryFor(driver);
   if (/competing/i.test(String(live?.status || ''))) {
     return Number(live?.speed) > 0 ? 'moving' : 'stopped';
@@ -186,7 +196,8 @@ function driverTrackState(driver) {
 
 function displayTelemetryStatus(driver, live) {
   if (Number.isFinite(driver.stageTimeMs)) return 'Finished';
-  return live?.status || 'Not started';
+  if (!driverHasStarted(driver)) return 'Not started';
+  return live?.status || 'Started';
 }
 
 async function loadTelemetry() {
@@ -251,10 +262,16 @@ async function loadCurrentStage() {
 
   const base = api(`/stages/${stage.id}`);
   const query = `?rallyId=${encodeURIComponent(config.rallyId)}`;
-  const [stageTimesResult, splitTimesResult, resultsResult] = await Promise.allSettled([
+  const startControl = (stage.controls || []).find(control => control.type === 'StageStart');
+  const controlTimesUrl = startControl?.controlId
+    ? api(`/controls/${startControl.controlId}/controlTimes.json`)
+    : null;
+
+  const [stageTimesResult, splitTimesResult, resultsResult, controlTimesResult] = await Promise.allSettled([
     getJSON(`${base}/stagetimes.json${query}`),
     getJSON(`${base}/splittimes.json${query}`),
-    getJSON(`${base}/results.json${query}`)
+    getJSON(`${base}/results.json${query}`),
+    controlTimesUrl ? getJSON(controlTimesUrl) : Promise.resolve([])
   ]);
 
   const stageTimes = stageTimesResult.status === 'fulfilled' && Array.isArray(stageTimesResult.value)
@@ -263,7 +280,13 @@ async function loadCurrentStage() {
     ? splitTimesResult.value : [];
   const results = resultsResult.status === 'fulfilled' && Array.isArray(resultsResult.value)
     ? resultsResult.value : [];
+  const controlTimes = controlTimesResult.status === 'fulfilled' && Array.isArray(controlTimesResult.value)
+    ? controlTimesResult.value : [];
 
+  const startByEntry = new Map(controlTimes.map(row => [
+    String(row.entryId),
+    row.actualDateTimeLocal || row.actualDateTime || row.dueDateTimeLocal || row.dueDateTime || null
+  ]));
   const stageByEntry = new Map(stageTimes.map(row => [String(row.entryId), row.elapsedDurationMs]));
   const overallByEntry = new Map(results.map(row => [String(row.entryId), row.totalTimeMs]));
   const resultPosition = new Map(results.map(row => [String(row.entryId), row.position]));
@@ -275,7 +298,7 @@ async function loadCurrentStage() {
     splitMaps.get(entryId).set(String(row.splitPointId), row.elapsedDurationMs);
   }
 
-  const ids = new Set([...stageByEntry.keys(), ...overallByEntry.keys(), ...splitMaps.keys()]);
+  const ids = new Set([...entries.keys(), ...stageByEntry.keys(), ...overallByEntry.keys(), ...splitMaps.keys(), ...startByEntry.keys()]);
   stage.drivers = [...ids].map(id => {
     const entry = entries.get(id) || { id, name: `#${id}`, order: 999, category: 'MUU' };
     return {
@@ -283,6 +306,7 @@ async function loadCurrentStage() {
       stageTimeMs: stageByEntry.get(id),
       overallTimeMs: overallByEntry.get(id),
       overallPosition: resultPosition.get(id),
+      startDateTime: startByEntry.get(id),
       splits: stage.splitPoints.map(point => splitMaps.get(id)?.get(String(point.splitPointId)))
     };
   }).sort((a, b) => {
