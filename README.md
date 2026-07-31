@@ -1,10 +1,3 @@
-# Ralli Live v11
+# Ralli Live v12
 
-Parandatud sõitjate staatuse värvimine splitivaates.
-
-- valge: sõitja individuaalne stardiaeg pole saabunud
-- roheline: sõitja on alustanud, status Competing ja speed > 0
-- punane: sõitja on alustanud, status Competing ja speed = 0
-- tumeroheline: katseaeg on olemas
-
-Stardiaeg loetakse valitud katse StageStart controlTimes.json andmetest.
+Parandatud WRC kontrollaegade UTC tõlgendus. Ilma ajavööndita `actualDateTime` ja `dueDateTime` väärtusi käsitletakse UTC-na, mistõttu sõitja jääb enne oma tegelikku katse stardiaega valgeks.

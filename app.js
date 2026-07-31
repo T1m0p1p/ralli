@@ -85,6 +85,22 @@ function categoryName(entry) {
   return group.toUpperCase() || 'MUU';
 }
 
+
+function normalizeApiDateTime(value) {
+  if (!value) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  // WRC API UTC timestamps often omit the trailing Z. Values that already
+  // contain an explicit timezone offset are left unchanged.
+  return /(?:Z|[+-]\d{2}:?\d{2})$/i.test(text) ? text : `${text}Z`;
+}
+
+function parseApiDateTime(value) {
+  const normalized = normalizeApiDateTime(value);
+  if (!normalized) return NaN;
+  return new Date(normalized).getTime();
+}
+
 function stageStartTime(stage) {
   const start = (stage.controls || []).find(control => control.type === 'StageStart');
   return start?.firstCarDueDateTimeLocal || (start?.firstCarDueDateTime ? `${start.firstCarDueDateTime}Z` : null) || null;
@@ -179,7 +195,7 @@ function driverHasStarted(driver) {
   if (Number.isFinite(driver.stageTimeMs)) return true;
   if (driver.splits?.some(Number.isFinite)) return true;
   if (!driver.startDateTime) return false;
-  const startMs = new Date(driver.startDateTime).getTime();
+  const startMs = parseApiDateTime(driver.startDateTime);
   return Number.isFinite(startMs) && Date.now() >= startMs;
 }
 
@@ -283,10 +299,11 @@ async function loadCurrentStage() {
   const controlTimes = controlTimesResult.status === 'fulfilled' && Array.isArray(controlTimesResult.value)
     ? controlTimesResult.value : [];
 
-  const startByEntry = new Map(controlTimes.map(row => [
-    String(row.entryId),
-    row.actualDateTimeLocal || row.actualDateTime || row.dueDateTimeLocal || row.dueDateTime || null
-  ]));
+  const startByEntry = new Map(controlTimes.map(row => {
+    const localValue = row.actualDateTimeLocal || row.dueDateTimeLocal || null;
+    const utcValue = row.actualDateTime || row.dueDateTime || null;
+    return [String(row.entryId), localValue || normalizeApiDateTime(utcValue)];
+  }));
   const stageByEntry = new Map(stageTimes.map(row => [String(row.entryId), row.elapsedDurationMs]));
   const overallByEntry = new Map(results.map(row => [String(row.entryId), row.totalTimeMs]));
   const resultPosition = new Map(results.map(row => [String(row.entryId), row.position]));
