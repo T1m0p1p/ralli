@@ -15,7 +15,7 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
-const APP_VERSION = 'v25';
+const APP_VERSION = 'v26';
 const tabs = ['DASHBOARD', 'KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
 const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
@@ -44,27 +44,23 @@ function formatTimeMs(ms) {
     : `${minutes}:${seconds}`;
 }
 
-function formatDeltaMs(ms) {
+function formatGapMs(ms) {
   if (!Number.isFinite(ms)) return '—';
   if (Math.abs(ms) < 50) return '0.0';
+
   const sign = ms > 0 ? '+' : '−';
-  const totalSeconds = Math.abs(ms) / 1000;
+  const totalTenths = Math.round(Math.abs(ms) / 100);
+  const totalSeconds = totalTenths / 10;
+
   if (totalSeconds < 60) return `${sign}${totalSeconds.toFixed(1)}`;
+
   const minutes = Math.floor(totalSeconds / 60);
-  const seconds = (totalSeconds % 60).toFixed(1).padStart(4, '0');
+  const seconds = (totalSeconds - minutes * 60).toFixed(1).padStart(4, '0');
   return `${sign}${minutes}:${seconds}`;
 }
 
-function formatResultGapMs(ms) {
-  if (!Number.isFinite(ms)) return '—';
-  if (Math.abs(ms) < 50) return '0.0';
-  const sign = ms > 0 ? '+' : '−';
-  const totalSeconds = Math.abs(ms) / 1000;
-  if (totalSeconds < 60) return `${sign}${totalSeconds.toFixed(1)}`;
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = (totalSeconds % 60).toFixed(1).padStart(4, '0');
-  return `${sign}${minutes}:${seconds}`;
-}
+const formatDeltaMs = formatGapMs;
+const formatResultGapMs = formatGapMs;
 
 function deltaClass(ms) {
   if (!Number.isFinite(ms) || Math.abs(ms) < 50) return 'neutral';

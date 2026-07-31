@@ -1,4 +1,4 @@
-# Ralli Live v25
+# Ralli Live v26
 
 Puhas versioon nelja failiga.
 
@@ -19,3 +19,8 @@ Katse- ja üldseisu ajavahed kuvatakse alates 60 sekundist kujul `+1:04.3`; alla
 ## v25
 - SPLIT vaates kuvatakse üle 60 sekundi vahed minutite ja sekunditena (nt +1:04.3).
 - Sama vorming kehtib Dashboardi SPLITID plokis.
+
+
+## v26
+
+SPLIT, KATSE ja ÜLDSEIS kasutavad ühist ajavahe formaati: alla 60 s `+42.7`, alates 60 s `+1:04.3`. Lisatud tugevam cache-busting.
