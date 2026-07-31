@@ -15,7 +15,7 @@ const config = {
   eventName: params.get('name') || DEFAULT_CONFIG.eventName
 };
 
-const APP_VERSION = 'v23';
+const APP_VERSION = 'v25';
 const tabs = ['DASHBOARD', 'KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
 const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
@@ -47,7 +47,23 @@ function formatTimeMs(ms) {
 function formatDeltaMs(ms) {
   if (!Number.isFinite(ms)) return '—';
   if (Math.abs(ms) < 50) return '0.0';
-  return `${ms > 0 ? '+' : '−'}${Math.abs(ms / 1000).toFixed(1)}`;
+  const sign = ms > 0 ? '+' : '−';
+  const totalSeconds = Math.abs(ms) / 1000;
+  if (totalSeconds < 60) return `${sign}${totalSeconds.toFixed(1)}`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = (totalSeconds % 60).toFixed(1).padStart(4, '0');
+  return `${sign}${minutes}:${seconds}`;
+}
+
+function formatResultGapMs(ms) {
+  if (!Number.isFinite(ms)) return '—';
+  if (Math.abs(ms) < 50) return '0.0';
+  const sign = ms > 0 ? '+' : '−';
+  const totalSeconds = Math.abs(ms) / 1000;
+  if (totalSeconds < 60) return `${sign}${totalSeconds.toFixed(1)}`;
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = (totalSeconds % 60).toFixed(1).padStart(4, '0');
+  return `${sign}${minutes}:${seconds}`;
 }
 
 function deltaClass(ms) {
@@ -437,7 +453,7 @@ function renderStageView(stage) {
         <button class="result-row" data-driver="${driver.id}">
           <span class="pos">${index + 1}</span>
           <span class="driver">${driver.name}</span>
-          <span class="time">${index === 0 ? formatTimeMs(driver.stageTimeMs) : formatDeltaMs(driver.stageTimeMs - leader)}</span>
+          <span class="time">${index === 0 ? formatTimeMs(driver.stageTimeMs) : formatResultGapMs(driver.stageTimeMs - leader)}</span>
         </button>`).join('') : '<p class="empty">Selles kategoorias katseaegu veel ei ole.</p>'}
     </section>`;
 }
@@ -491,7 +507,7 @@ function renderOverallView(stage) {
           <span class="pos">${index + 1}</span>
           <span class="driver">${driver.name}</span>
           <span class="time">${formatTimeMs(driver.overallTimeMs)}</span>
-          <span class="gap">${index ? formatDeltaMs(driver.overallTimeMs - leader) : ''}</span>
+          <span class="gap">${index ? formatResultGapMs(driver.overallTimeMs - leader) : ''}</span>
         </button>`).join('') : '<p class="empty">Selles kategoorias üldseisu veel ei ole.</p>'}
     </section>`;
 }
@@ -584,7 +600,7 @@ function dashboardStageRows(stage) {
     <button class="dash-result-row" data-driver="${driver.id}">
       <span class="dash-pos">${index + 1}</span>
       <span class="dash-driver">${driver.name}</span>
-      <span class="dash-time">${index === 0 ? formatTimeMs(driver.stageTimeMs) : formatDeltaMs(driver.stageTimeMs - leader)}</span>
+      <span class="dash-time">${index === 0 ? formatTimeMs(driver.stageTimeMs) : formatResultGapMs(driver.stageTimeMs - leader)}</span>
     </button>`).join('');
 }
 
@@ -598,7 +614,7 @@ function dashboardOverallRows(stage) {
     <button class="dash-result-row" data-driver="${driver.id}">
       <span class="dash-pos">${index + 1}</span>
       <span class="dash-driver">${driver.name}</span>
-      <span class="dash-time">${index === 0 ? formatTimeMs(driver.overallTimeMs) : formatDeltaMs(driver.overallTimeMs - leader)}</span>
+      <span class="dash-time">${index === 0 ? formatTimeMs(driver.overallTimeMs) : formatResultGapMs(driver.overallTimeMs - leader)}</span>
     </button>`).join('');
 }
 

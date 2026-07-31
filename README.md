@@ -1,4 +1,4 @@
-# Ralli Live v23
+# Ralli Live v25
 
 Puhas versioon nelja failiga.
 
@@ -10,3 +10,12 @@ Desktopi päis on ümber kujundatud:
 - Dashboardi varasem dubleeriv ülarida on eemaldatud.
 
 Failid: `index.html`, `app.js`, `styles.css`, `README.md`.
+
+
+## v24
+Katse- ja üldseisu ajavahed kuvatakse alates 60 sekundist kujul `+1:04.3`; alla minuti kujul `+42.7`.
+
+
+## v25
+- SPLIT vaates kuvatakse üle 60 sekundi vahed minutite ja sekunditena (nt +1:04.3).
+- Sama vorming kehtib Dashboardi SPLITID plokis.
