@@ -190,3 +190,35 @@ button, select { font: inherit; }
   .top-tabs { grid-template-columns: repeat(5, minmax(0, 1fr)); }
   .top-tabs button[data-tab="DASHBOARD"] { display: none; }
 }
+
+/* v20 — discreet desktop dashboard scrollbars */
+@media (min-width: 900px) {
+  .dash-panel-body {
+    scrollbar-width: thin;
+    scrollbar-color: #303034 transparent;
+    scrollbar-gutter: auto;
+  }
+
+  .dash-panel-body::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+
+  .dash-panel-body::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  .dash-panel-body::-webkit-scrollbar-thumb {
+    background: #303034;
+    border-radius: 999px;
+    border: 0;
+  }
+
+  .dash-panel-body::-webkit-scrollbar-thumb:hover {
+    background: #48484d;
+  }
+
+  .dash-panel-body::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
