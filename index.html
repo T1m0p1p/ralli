@@ -8,7 +8,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
 <title>Ralli Live</title>
-<link rel="stylesheet" href="styles.css?v=29.0.0" />
+<link rel="stylesheet" href="styles.css?v=31.0.0" />
 </head>
 <body>
 <main class="app-shell">
@@ -19,6 +19,7 @@
         <span class="category-label">Kategooria</span>
         <div class="category-buttons" id="categoryButtons" aria-label="Kategooria"></div>
         <button class="focus-button" id="focusToggle" type="button" aria-pressed="false" hidden>TOP10 + EE</button>
+        <button class="layout-button" id="layoutReset" type="button" hidden title="Taasta Dashboardi algne paigutus">↺ PAIGUTUS</button>
       </div>
       <div class="stage-picker">
         <button class="stage-nav" id="prev" aria-label="Eelmine katse">‹</button>
@@ -31,9 +32,10 @@
       </div>
     </div>
     <section id="content"><p class="empty">Andmeid laaditakse…</p></section>
-    <footer class="refresh-bar"><button id="refresh">↻ Värskenda</button><span id="updated"></span><small class="version">v29</small></footer>
+    <footer class="refresh-bar"><button id="refresh" type="button">↻ Värskenda</button><span id="updated"></span><small class="version">v31</small></footer>
   </section>
 </main>
-<script src="app.js?v=29.0.0"></script>
+<script src="core.js?v=31.0.0"></script>
+<script src="app.js?v=31.0.0"></script>
 </body>
 </html>

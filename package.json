@@ -1,0 +1,12 @@
+{
+  "name": "ralli-live",
+  "version": "31.0.0",
+  "private": true,
+  "description": "Minimalistlik WRC live-tulemuste dashboard",
+  "scripts": {
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
