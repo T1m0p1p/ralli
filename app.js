@@ -1,45 +1,43 @@
 const API_ROOT = 'https://p-p.redbull.com/rb-wrccom-lintegration-yv-prod/api';
-const {
-  buildEntryAliasMap,
-  buildSplitMaps,
-  canonicalEntryId,
-  classifyEntryCategory,
-  escapeHtml,
-  recordEntryId,
-  selectDashboardFocusIds,
-  sortDriversByStartOrder,
-  splitPointId,
-  toFiniteNumber
-} = window.RalliLiveCore || {};
-
-if (!window.RalliLiveCore) throw new Error('RalliLiveCore jäi laadimata.');
-
-const DEFAULT_CONFIG = {
-  eventId: '644',
-  rallyId: '712',
-  itineraryId: '1461',
-  eventName: 'Secto Rally Finland 2026'
-};
 
 const params = new URLSearchParams(location.search);
-const config = {
-  eventId: params.get('event') || DEFAULT_CONFIG.eventId,
-  rallyId: params.get('rally') || DEFAULT_CONFIG.rallyId,
-  itineraryId: params.get('itinerary') || DEFAULT_CONFIG.itineraryId,
-  eventName: params.get('name') || DEFAULT_CONFIG.eventName
+let config = {
+  eventId: params.get('event') || null,
+  rallyId: params.get('rally') || null,
+  eventName: params.get('name') || null
 };
 
-const APP_VERSION = 'v31';
+const APP_VERSION = 'v30';
+const DISCOVERY_CACHE_KEY = 'ralli-auto-config-v30';
+const DISCOVERY_SEED_EVENT_ID = 644; // ainult otsingu lähtepunkt, mitte ralli sidumine
+const DISCOVERY_EVENT_RADIUS = 32;
+const DISCOVERY_RALLY_OFFSET = 68;
+const DISCOVERY_RALLY_RADIUS = 18;
+
+const WRC_CALENDAR_2026 = [
+  ['2026-01-22','2026-01-25','WRC Rallye Monte-Carlo'],
+  ['2026-02-12','2026-02-15','WRC Rally Sweden'],
+  ['2026-03-12','2026-03-15','WRC Safari Rally Kenya'],
+  ['2026-04-09','2026-04-12','WRC Croatia Rally'],
+  ['2026-04-23','2026-04-26','WRC Rally Islas Canarias'],
+  ['2026-05-07','2026-05-10','WRC Vodafone Rally de Portugal'],
+  ['2026-05-28','2026-05-31','WRC FORUM8 Rally Japan'],
+  ['2026-06-25','2026-06-28','WRC EKO Acropolis Rally Greece'],
+  ['2026-07-16','2026-07-19','WRC Delfi Rally Estonia'],
+  ['2026-07-30','2026-08-02','WRC Secto Rally Finland'],
+  ['2026-08-27','2026-08-30','WRC ueno Rally del Paraguay'],
+  ['2026-09-10','2026-09-13','WRC Rally Chile Bio Bío'],
+  ['2026-10-01','2026-10-04','WRC Rally Italia Sardegna'],
+  ['2026-11-12','2026-11-15','WRC Rally Saudi Arabia']
+].map(([start,end,name]) => ({start:new Date(`${start}T00:00:00Z`).getTime(), end:new Date(`${end}T23:59:59Z`).getTime(), name}));
 const tabs = ['DASHBOARD', 'KATSE', 'SPLIT', 'ÜLDSEIS', 'SUPER SUNDAY', 'INFO'];
 const categoryOrder = ['KÕIK', 'WRC', 'WRC2', 'WRC3'];
 let tab = 'SPLIT';
 let stages = [];
 let sundayStageIds = [];
 let sundayResults = [];
-let sundayStageCache = new Map();
 let stageIndex = 0;
 let entries = new Map();
-let entryAliases = new Map();
 let referenceId = null;
 let category = localStorage.getItem('ralli-category') || 'KÕIK';
 let dashboardFocus = localStorage.getItem('ralli-dashboard-focus') === '1';
@@ -49,60 +47,9 @@ const previousOverallCache = new Map();
 let loading = false;
 let telemetry = new Map();
 let telemetryLoading = false;
-let refreshQueued = false;
-let refreshQueuedWithBase = false;
-let dashboardResizing = false;
-let dashboardRenderPending = false;
 const TELEMETRY_URL = 'https://webappsdata.wrc.com/srv/wrc/json/api/liveservice/getData?timeout=5000';
-const DASHBOARD_LAYOUT_KEY = 'ralli-dashboard-layout-v1';
-const DEFAULT_DASHBOARD_LAYOUT = Object.freeze({
-  columns: [1.65, 0.62, 0.72],
-  rows: [1.12, 0.88]
-});
-let dashboardLayout = readDashboardLayout();
 
 const $ = selector => document.querySelector(selector);
-
-function normalizeDashboardLayout(value) {
-  const columns = Array.isArray(value?.columns) ? value.columns.map(Number) : [];
-  const rows = Array.isArray(value?.rows) ? value.rows.map(Number) : [];
-  const validColumns = columns.length === 3 && columns.every(item => Number.isFinite(item) && item > 0);
-  const validRows = rows.length === 2 && rows.every(item => Number.isFinite(item) && item > 0);
-  return {
-    columns: validColumns ? columns : [...DEFAULT_DASHBOARD_LAYOUT.columns],
-    rows: validRows ? rows : [...DEFAULT_DASHBOARD_LAYOUT.rows]
-  };
-}
-
-function readDashboardLayout() {
-  try {
-    return normalizeDashboardLayout(JSON.parse(localStorage.getItem(DASHBOARD_LAYOUT_KEY) || 'null'));
-  } catch {
-    return normalizeDashboardLayout(null);
-  }
-}
-
-function saveDashboardLayout() {
-  try {
-    localStorage.setItem(DASHBOARD_LAYOUT_KEY, JSON.stringify(dashboardLayout));
-  } catch (error) {
-    console.warn('Dashboardi paigutuse salvestamine ebaõnnestus:', error);
-  }
-}
-
-function resetDashboardLayout() {
-  dashboardLayout = normalizeDashboardLayout(null);
-  saveDashboardLayout();
-  render();
-}
-
-function applyDashboardLayout(grid) {
-  if (!grid) return;
-  const [first, second, third] = dashboardLayout.columns;
-  const [top, bottom] = dashboardLayout.rows;
-  grid.style.gridTemplateColumns = `minmax(300px, ${first}fr) 7px minmax(170px, ${second}fr) 7px minmax(180px, ${third}fr)`;
-  grid.style.gridTemplateRows = `minmax(100px, ${top}fr) 7px minmax(100px, ${bottom}fr)`;
-}
 
 function formatTimeMs(ms) {
   if (!Number.isFinite(ms)) return '—';
@@ -139,22 +86,99 @@ function deltaClass(ms) {
 }
 
 async function getJSON(url) {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), 15000);
+  const response = await fetch(url, {
+    cache: 'no-store',
+    headers: { Accept: 'application/json' }
+  });
+  if (!response.ok) throw new Error(`HTTP ${response.status}: ${url}`);
+  return response.json();
+}
+
+function stageDateRange(stageList) {
+  const times = (Array.isArray(stageList) ? stageList : [])
+    .flatMap(stage => (stage.controls || []).filter(c => c.type === 'StageStart').map(c => parseApiDateTime(c.firstCarDueDateTimeLocal || c.firstCarDueDateTime)))
+    .filter(Number.isFinite);
+  if (!times.length) return null;
+  return { start: Math.min(...times), end: Math.max(...times) };
+}
+
+function calendarNameForRange(range) {
+  if (!range) return 'WRC Rally';
+  const midpoint = (range.start + range.end) / 2;
+  const match = WRC_CALENDAR_2026.find(item => midpoint >= item.start - 86400000 && midpoint <= item.end + 86400000);
+  return match?.name || `WRC Rally ${new Date(range.start).getUTCFullYear()}`;
+}
+
+async function probeEvent(eventId) {
   try {
-    const response = await fetch(url, {
-      cache: 'no-store',
-      headers: { Accept: 'application/json' },
-      signal: controller.signal
-    });
-    if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return await response.json();
-  } catch (error) {
-    if (error?.name === 'AbortError') throw new Error('Andmepäring aegus.');
-    throw error;
-  } finally {
-    window.clearTimeout(timeout);
+    const list = await getJSON(`${API_ROOT}/events/${eventId}/stages.json`);
+    const range = stageDateRange(list);
+    if (!range || !Array.isArray(list) || !list.length) return null;
+    return { eventId: String(eventId), stages: list, range };
+  } catch { return null; }
+}
+
+function scoreEvent(candidate, now) {
+  const before = candidate.range.start - 2 * 86400000;
+  const after = candidate.range.end + 2 * 86400000;
+  if (now >= before && now <= after) return Math.abs(now - (candidate.range.start + candidate.range.end) / 2) - 10**15;
+  if (candidate.range.end < now) return now - candidate.range.end;
+  return (candidate.range.start - now) + 5 * 10**12;
+}
+
+async function discoverRallyId(eventId) {
+  const center = Number(eventId) + DISCOVERY_RALLY_OFFSET;
+  const candidates = [];
+  for (let d = 0; d <= DISCOVERY_RALLY_RADIUS; d++) {
+    if (d === 0) candidates.push(center);
+    else candidates.push(center + d, center - d);
   }
+  for (const rallyId of candidates) {
+    try {
+      const rows = await getJSON(`${API_ROOT}/events/${eventId}/rallies/${rallyId}/entries.json`);
+      if (Array.isArray(rows) && rows.length >= 3) return String(rallyId);
+    } catch {}
+  }
+  throw new Error(`Rally ID-d ei leitud event ${eventId} jaoks.`);
+}
+
+async function discoverActiveConfig() {
+  // URL parameetrid jäävad diagnostikaks/tooreks override'iks alles.
+  if (config.eventId && config.rallyId) {
+    config.eventName ||= 'WRC Rally';
+    return;
+  }
+
+  const now = Date.now();
+  try {
+    const cached = JSON.parse(localStorage.getItem(DISCOVERY_CACHE_KEY) || 'null');
+    if (cached?.eventId && cached?.rallyId && now - Number(cached.savedAt || 0) < 6 * 3600000) {
+      const checked = await probeEvent(Number(cached.eventId));
+      if (checked && scoreEvent(checked, now) < 3 * 86400000) {
+        config = { eventId: String(cached.eventId), rallyId: String(cached.rallyId), eventName: cached.eventName || calendarNameForRange(checked.range) };
+        return;
+      }
+    }
+  } catch {}
+
+  const ids = [];
+  for (let d = 0; d <= DISCOVERY_EVENT_RADIUS; d++) {
+    if (d === 0) ids.push(DISCOVERY_SEED_EVENT_ID);
+    else ids.push(DISCOVERY_SEED_EVENT_ID + d, DISCOVERY_SEED_EVENT_ID - d);
+  }
+
+  const found = [];
+  // väiksed batchid, et mitte WRC endpointi korraga üle koormata
+  for (let i = 0; i < ids.length; i += 8) {
+    const batch = await Promise.all(ids.slice(i, i + 8).map(probeEvent));
+    found.push(...batch.filter(Boolean));
+  }
+  if (!found.length) throw new Error('WRC aktiivset rallit ei õnnestunud automaatselt leida.');
+  found.sort((a,b) => scoreEvent(a, now) - scoreEvent(b, now));
+  const best = found[0];
+  const rallyId = await discoverRallyId(best.eventId);
+  config = { eventId: best.eventId, rallyId, eventName: calendarNameForRange(best.range) };
+  localStorage.setItem(DISCOVERY_CACHE_KEY, JSON.stringify({...config, savedAt: now}));
 }
 
 function api(path) {
@@ -168,6 +192,17 @@ function driverName(entry) {
   }
   return driver.abbvName || driver.fullName || `#${entry?.identifier || entry?.entryId}`;
 }
+
+function categoryName(entry) {
+  const group = entry?.group?.name || '';
+  const eventClass = entry?.eventClasses?.[0]?.name || '';
+  if (/rally\s*1/i.test(group) || /^RC1$/i.test(eventClass)) return 'WRC';
+  if (/rally\s*2/i.test(group) || /^RC2$/i.test(eventClass)) return 'WRC2';
+  if (/rally\s*3/i.test(group) || /^RC3$/i.test(eventClass)) return 'WRC3';
+  if (eventClass) return eventClass.toUpperCase();
+  return group.toUpperCase() || 'MUU';
+}
+
 
 function normalizeApiDateTime(value) {
   if (!value) return null;
@@ -186,7 +221,7 @@ function parseApiDateTime(value) {
 
 function stageStartTime(stage) {
   const start = (stage.controls || []).find(control => control.type === 'StageStart');
-  return normalizeApiDateTime(start?.firstCarDueDateTime) || start?.firstCarDueDateTimeLocal || null;
+  return start?.firstCarDueDateTimeLocal || (start?.firstCarDueDateTime ? `${start.firstCarDueDateTime}Z` : null) || null;
 }
 
 
@@ -300,7 +335,7 @@ async function loadPreviousOverallSnapshot() {
         rows = [];
       }
     }
-    const usable = rows.filter(row => toFiniteNumber(row.totalTimeMs) !== undefined);
+    const usable = rows.filter(row => Number.isFinite(row.totalTimeMs));
     if (usable.length) {
       previousOverallSnapshot = usable;
       previousOverallStageTitle = previous.title;
@@ -311,7 +346,23 @@ async function loadPreviousOverallSnapshot() {
 
 function dashboardFocusIds() {
   if (!dashboardFocus || !previousOverallSnapshot.length) return null;
-  return selectDashboardFocusIds(previousOverallSnapshot, entries, category, entryAliases);
+
+  const ranked = previousOverallSnapshot
+    .map(row => {
+      const entry = entries.get(String(row.entryId));
+      return entry ? { ...entry, totalTimeMs: row.totalTimeMs } : null;
+    })
+    .filter(Boolean);
+
+  const inCategory = category === 'KÕIK' ? ranked : ranked.filter(driver => driver.category === category);
+  const top10 = inCategory
+    .filter(driver => Number.isFinite(driver.totalTimeMs))
+    .slice()
+    .sort((a, b) => a.totalTimeMs - b.totalTimeMs)
+    .slice(0, 10);
+  const estonians = inCategory.filter(driver => driver.isEstonian);
+
+  return new Set([...top10, ...estonians].map(driver => String(driver.id)));
 }
 
 function dashboardFocusDrivers(drivers) {
@@ -323,7 +374,6 @@ function dashboardFocusDrivers(drivers) {
 function dashboardFocusLabel() {
   if (!dashboardFocus) return 'kõik';
   if (!previousOverallSnapshot.length) return 'TOP10 + EE · eelmine üldseis puudub';
-  if (!dashboardFocusIds()) return `TOP10 + EE · ${category} eelmine üldseis puudub`;
   return `TOP10 + EE · ${previousOverallStageTitle} lõpp`;
 }
 
@@ -379,29 +429,23 @@ async function loadTelemetry() {
 }
 
 async function loadBaseData() {
-  const [stageList, entryList, itinerary] = await Promise.all([
+  const [stageList, entryList] = await Promise.all([
     getJSON(api('/stages.json')),
-    getJSON(api(`/rallies/${config.rallyId}/entries.json`)),
-    getJSON(api(`/itineraries/${config.itineraryId}.json`))
+    getJSON(api(`/rallies/${config.rallyId}/entries.json`))
   ]);
 
-  const rawEntries = Array.isArray(entryList) ? entryList : [];
-  entryAliases = buildEntryAliasMap(rawEntries);
-  sundayStageCache = new Map();
-  previousOverallCache.clear();
-  entries = new Map(rawEntries.map(entry => {
-    const id = canonicalEntryId(entry);
-    if (!id) return null;
-    return [id, {
-      id,
+  entries = new Map((Array.isArray(entryList) ? entryList : []).map(entry => [
+    String(entry.entryId),
+    {
+      id: String(entry.entryId),
       name: driverName(entry),
       order: entry.entryListOrder ?? 999,
       number: entry.identifier || '',
       priority: entry.priority || '',
-      category: classifyEntryCategory(entry),
+      category: categoryName(entry),
       isEstonian: isEstonianEntry(entry)
-    }];
-  }).filter(Boolean));
+    }
+  ]));
 
   stages = (Array.isArray(stageList) ? stageList : [])
     .filter(stage => stage.stageId && stage.code)
@@ -414,11 +458,13 @@ async function loadBaseData() {
       drivers: []
     }));
 
-  const legs = itinerary?.itineraryLegs || [];
-  const finalLeg = [...legs].sort((a, b) => (a.order || 0) - (b.order || 0)).at(-1);
-  sundayStageIds = (finalLeg?.itinerarySections || [])
-    .flatMap(section => section.stages || [])
-    .map(stage => String(stage.stageId));
+  // Super Sunday = viimase võistluspäeva katsed; itineraryId pole enam vaja.
+  const datedStages = stages.map(stage => {
+    const t = parseApiDateTime(stageStartTime(stage));
+    return { stage, t, day: Number.isFinite(t) ? new Date(t).toISOString().slice(0, 10) : null };
+  }).filter(item => item.day);
+  const lastDay = datedStages.map(item => item.day).sort().at(-1);
+  sundayStageIds = datedStages.filter(item => item.day === lastDay).map(item => String(item.stage.id));
 
   if (!stages.length) throw new Error('Katseid ei leitud.');
   stageIndex = pickInitialStageIndex();
@@ -454,24 +500,20 @@ async function loadCurrentStage() {
     ? controlTimesResult.value : [];
 
   const startByEntry = new Map(controlTimes.map(row => {
-    const id = recordEntryId(row, entryAliases);
     const localValue = row.actualDateTimeLocal || row.dueDateTimeLocal || null;
     const utcValue = row.actualDateTime || row.dueDateTime || null;
-    return [id, normalizeApiDateTime(utcValue) || localValue];
-  }).filter(([id]) => id));
-  const stageByEntry = new Map(stageTimes.map(row => [
-    recordEntryId(row, entryAliases),
-    toFiniteNumber(row.elapsedDurationMs ?? row.elapsedTimeMs ?? row.timeMs)
-  ]).filter(([id]) => id));
-  const overallByEntry = new Map(results.map(row => [
-    recordEntryId(row, entryAliases),
-    toFiniteNumber(row.totalTimeMs)
-  ]).filter(([id]) => id));
-  const resultPosition = new Map(results.map(row => [
-    recordEntryId(row, entryAliases),
-    toFiniteNumber(row.position) ?? row.position
-  ]).filter(([id]) => id));
-  const splitMaps = buildSplitMaps(splitTimes, entryAliases);
+    return [String(row.entryId), localValue || normalizeApiDateTime(utcValue)];
+  }));
+  const stageByEntry = new Map(stageTimes.map(row => [String(row.entryId), row.elapsedDurationMs]));
+  const overallByEntry = new Map(results.map(row => [String(row.entryId), row.totalTimeMs]));
+  const resultPosition = new Map(results.map(row => [String(row.entryId), row.position]));
+
+  const splitMaps = new Map();
+  for (const row of splitTimes) {
+    const entryId = String(row.entryId);
+    if (!splitMaps.has(entryId)) splitMaps.set(entryId, new Map());
+    splitMaps.get(entryId).set(String(row.splitPointId), row.elapsedDurationMs);
+  }
 
   const ids = new Set([...entries.keys(), ...stageByEntry.keys(), ...overallByEntry.keys(), ...splitMaps.keys(), ...startByEntry.keys()]);
   stage.drivers = [...ids].map(id => {
@@ -482,7 +524,7 @@ async function loadCurrentStage() {
       overallTimeMs: overallByEntry.get(id),
       overallPosition: resultPosition.get(id),
       startDateTime: startByEntry.get(id),
-      splits: stage.splitPoints.map(point => splitMaps.get(id)?.get(splitPointId(point)))
+      splits: stage.splitPoints.map(point => splitMaps.get(id)?.get(String(point.splitPointId)))
     };
   }).sort((a, b) => {
     const aTime = Number.isFinite(a.stageTimeMs) ? a.stageTimeMs : Infinity;
@@ -492,7 +534,7 @@ async function loadCurrentStage() {
 
   await loadPreviousOverallSnapshot();
 
-  const visible = sortDriversByStartOrder(filteredDrivers(stage.drivers));
+  const visible = filteredDrivers(stage.drivers);
   if (!referenceId || !visible.some(driver => driver.id === referenceId)) {
     referenceId = visible[0]?.id || null;
   }
@@ -505,25 +547,18 @@ async function loadSundayResults() {
   }
 
   const query = `?rallyId=${encodeURIComponent(config.rallyId)}`;
-  const responses = await Promise.allSettled(sundayStageIds.map(async stageId => {
-    if (sundayStageCache.has(stageId)) return sundayStageCache.get(stageId);
-    const rows = await getJSON(api(`/stages/${stageId}/stagetimes.json${query}`));
-    const stage = stages.find(item => item.id === stageId);
-    if (/completed|finished/i.test(String(stage?.status || '')) && Array.isArray(rows)) {
-      sundayStageCache.set(stageId, rows);
-    }
-    return rows;
-  }));
+  const responses = await Promise.allSettled(sundayStageIds.map(stageId =>
+    getJSON(api(`/stages/${stageId}/stagetimes.json${query}`))
+  ));
 
   const totals = new Map();
   for (const response of responses) {
     if (response.status !== 'fulfilled' || !Array.isArray(response.value)) continue;
     for (const row of response.value) {
-      const elapsedDurationMs = toFiniteNumber(row.elapsedDurationMs ?? row.elapsedTimeMs ?? row.timeMs);
-      const id = recordEntryId(row, entryAliases);
-      if (!id || elapsedDurationMs === undefined) continue;
+      if (!Number.isFinite(row.elapsedDurationMs)) continue;
+      const id = String(row.entryId);
       const current = totals.get(id) || { totalTimeMs: 0, completedStages: 0 };
-      current.totalTimeMs += elapsedDurationMs;
+      current.totalTimeMs += row.elapsedDurationMs;
       current.completedStages += 1;
       totals.set(id, current);
     }
@@ -541,11 +576,7 @@ function setStatus(text, className = '') {
 }
 
 async function refresh(reloadBase = false) {
-  if (loading) {
-    refreshQueued = true;
-    refreshQueuedWithBase ||= reloadBase;
-    return;
-  }
+  if (loading) return;
   loading = true;
   setStatus('Laen…', 'loading');
   try {
@@ -560,12 +591,6 @@ async function refresh(reloadBase = false) {
   } finally {
     loading = false;
     render();
-    if (refreshQueued) {
-      const queuedWithBase = refreshQueuedWithBase;
-      refreshQueued = false;
-      refreshQueuedWithBase = false;
-      window.setTimeout(() => refresh(queuedWithBase), 0);
-    }
   }
 }
 
@@ -575,7 +600,7 @@ function renderCategorySelect() {
   const categories = availableCategories();
   if (!categories.includes(category)) category = 'KÕIK';
   host.innerHTML = categories.map(item =>
-    `<button type="button" class="category-button ${item === category ? 'active' : ''}" data-category="${escapeHtml(item)}" aria-pressed="${item === category}">${escapeHtml(item)}</button>`
+    `<button class="category-button ${item === category ? 'active' : ''}" data-category="${item}">${item}</button>`
   ).join('');
   host.querySelectorAll('[data-category]').forEach(button => {
     button.onclick = () => {
@@ -585,7 +610,7 @@ function renderCategorySelect() {
       const candidates = tab === 'DASHBOARD'
         ? dashboardFocusDrivers(currentStage?.drivers || [])
         : filteredDrivers(currentStage?.drivers || []);
-      referenceId = sortDriversByStartOrder(candidates)[0]?.id || null;
+      referenceId = candidates[0]?.id || null;
       render();
     };
   });
@@ -599,17 +624,11 @@ function renderCategorySelect() {
       ? 'Näita SPLITID ja LIVE plokkides kõiki valitud kategooria sõitjaid'
       : 'Näita SPLITID ja LIVE plokkides eelmise katse lõpu üldseisu TOP10 + kõiki Eesti sõitjaid';
   }
-
-  const layoutButton = $('#layoutReset');
-  if (layoutButton) {
-    layoutButton.hidden = tab !== 'DASHBOARD';
-    layoutButton.onclick = resetDashboardLayout;
-  }
 }
 
 function renderTabs() {
-  $('#tabs').innerHTML = `<div class="rally-name">${escapeHtml(config.eventName)}</div><nav class="tab-nav" aria-label="Vaade">${tabs.map(name =>
-    `<button type="button" class="${name === tab ? 'active' : ''}" data-tab="${name}" aria-pressed="${name === tab}">${name}</button>`
+  $('#tabs').innerHTML = `<div class="rally-name">${config.eventName}</div><nav class="tab-nav">${tabs.map(name =>
+    `<button class="${name === tab ? 'active' : ''}" data-tab="${name}">${name}</button>`
   ).join('')}</nav>`;
   document.querySelectorAll('[data-tab]').forEach(button => {
     button.onclick = () => {
@@ -628,16 +647,18 @@ function renderStageView(stage) {
     <section class="list-view">
       ${/running|inprogress/i.test(stage.status) ? '<div class="live-label">LIVE</div>' : ''}
       ${drivers.length ? drivers.map((driver, index) => `
-        <button type="button" class="result-row" data-driver="${escapeHtml(driver.id)}">
+        <button class="result-row" data-driver="${driver.id}">
           <span class="pos">${index + 1}</span>
-          <span class="driver">${escapeHtml(driver.name)}</span>
+          <span class="driver">${driver.name}</span>
           <span class="time">${index === 0 ? formatTimeMs(driver.stageTimeMs) : formatResultGapMs(driver.stageTimeMs - leader)}</span>
         </button>`).join('') : '<p class="empty">Selles kategoorias katseaegu veel ei ole.</p>'}
     </section>`;
 }
 
 function renderSplitView(stage) {
-  const drivers = sortDriversByStartOrder(filteredDrivers(stage.drivers));
+  const drivers = filteredDrivers(stage.drivers)
+    .slice()
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || (a.number ?? 999) - (b.number ?? 999));
   const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
   if (!reference) {
     $('#content').innerHTML = '<p class="empty">Selles kategoorias splitiaegu veel ei ole.</p>';
@@ -653,7 +674,7 @@ function renderSplitView(stage) {
   drivers.forEach((driver, index) => {
     const selected = driver.id === reference.id;
     const trackState = driverTrackState(driver);
-    html += `<button type="button" class="driver-cell ${selected ? 'selected' : ''}" data-driver="${escapeHtml(driver.id)}"><span class="track-indicator track-${trackState}">${index + 1}</span><strong>${escapeHtml(driver.name)}</strong></button>`;
+    html += `<button class="driver-cell ${selected ? 'selected' : ''}" data-driver="${driver.id}"><span class="track-indicator track-${trackState}">${index + 1}</span><strong>${driver.name}</strong></button>`;
 
     driver.splits.forEach((splitMs, splitIndex) => {
       const referenceMs = reference.splits[splitIndex];
@@ -679,9 +700,9 @@ function renderOverallView(stage) {
     <section class="overall-view">
       <div class="overall-head"><span></span><span>AEG</span><span>VAHE</span></div>
       ${drivers.length ? drivers.map((driver, index) => `
-        <button type="button" class="overall-row" data-driver="${escapeHtml(driver.id)}">
+        <button class="overall-row" data-driver="${driver.id}">
           <span class="pos">${index + 1}</span>
-          <span class="driver">${escapeHtml(driver.name)}</span>
+          <span class="driver">${driver.name}</span>
           <span class="time">${formatTimeMs(driver.overallTimeMs)}</span>
           <span class="gap">${index ? formatResultGapMs(driver.overallTimeMs - leader) : ''}</span>
         </button>`).join('') : '<p class="empty">Selles kategoorias üldseisu veel ei ole.</p>'}
@@ -699,9 +720,9 @@ function renderSundayView() {
       <p class="sunday-note">Viimase võistluspäeva katsete summa · ${maxCompleted}/${sundayStageIds.length} katset</p>
       <div class="sunday-head"><span></span><span>AEG</span><span>VAHE</span></div>
       ${classified.length ? classified.map((driver, index) => `
-        <button type="button" class="sunday-row" data-driver="${escapeHtml(driver.id)}">
+        <button class="sunday-row" data-driver="${driver.id}">
           <span class="pos">${index + 1}</span>
-          <span class="driver">${escapeHtml(driver.name)}</span>
+          <span class="driver">${driver.name}</span>
           <span class="time">${formatTimeMs(driver.totalTimeMs)}</span>
           <span class="gap">${index ? formatDeltaMs(driver.totalTimeMs - leader) : ''}</span>
         </button>`).join('') : '<p class="empty">Super Sunday arvestuse aegu veel ei ole.</p>'}
@@ -745,12 +766,12 @@ function renderInfoView(stage) {
           const stageDriver = stage.drivers.find(item => item.id === driver.id) || driver;
           const trackState = driverTrackState(stageDriver);
           return `
-            <button type="button" class="info-driver sticky-info" data-driver="${escapeHtml(driver.id)}">
-              <span class="track-indicator track-${trackState}">#${escapeHtml(driver.number)}</span><strong>${escapeHtml(driver.name)}</strong>
+            <button class="info-driver sticky-info" data-driver="${driver.id}">
+              <span class="track-indicator track-${trackState}">#${driver.number}</span><strong>${driver.name}</strong>
             </button>
             <div class="info-cell">${formatTelemetryNumber(live?.speed, { decimals: 0, suffix: ' km/h', min: 0 })}</div>
             <div class="info-cell">${formatTelemetryNumber(live?.kms, { decimals: 1, suffix: ' km', min: 0 })}</div>
-            <div class="info-cell status-cell">${escapeHtml(displayTelemetryStatus(stageDriver, live))}</div>
+            <div class="info-cell status-cell">${displayTelemetryStatus(stageDriver, live)}</div>
             <div class="info-cell">${formatTelemetryNumber(live?.gear, { decimals: 0, min: 0 })}</div>
             <div class="info-cell">${formatTelemetryNumber(live?.throttle, { decimals: 0, suffix: '%', min: 0, max: 100 })}</div>`;
         }).join('')}
@@ -773,9 +794,9 @@ function dashboardStageRows(stage) {
   const leader = drivers[0]?.stageTimeMs;
   if (!drivers.length) return '<p class="dash-empty">Katseaegu veel ei ole.</p>';
   return drivers.map((driver, index) => `
-    <button type="button" class="dash-result-row" data-driver="${escapeHtml(driver.id)}">
+    <button class="dash-result-row" data-driver="${driver.id}">
       <span class="dash-pos">${index + 1}</span>
-      <span class="dash-driver">${escapeHtml(driver.name)}</span>
+      <span class="dash-driver">${driver.name}</span>
       <span class="dash-time">${index === 0 ? formatTimeMs(driver.stageTimeMs) : formatResultGapMs(driver.stageTimeMs - leader)}</span>
     </button>`).join('');
 }
@@ -787,9 +808,9 @@ function dashboardOverallRows(stage) {
   const leader = drivers[0]?.overallTimeMs;
   if (!drivers.length) return '<p class="dash-empty">Üldseisu veel ei ole.</p>';
   return drivers.map((driver, index) => `
-    <button type="button" class="dash-result-row" data-driver="${escapeHtml(driver.id)}">
+    <button class="dash-result-row" data-driver="${driver.id}">
       <span class="dash-pos">${index + 1}</span>
-      <span class="dash-driver">${escapeHtml(driver.name)}</span>
+      <span class="dash-driver">${driver.name}</span>
       <span class="dash-time">${index === 0 ? formatTimeMs(driver.overallTimeMs) : formatResultGapMs(driver.overallTimeMs - leader)}</span>
     </button>`).join('');
 }
@@ -805,9 +826,9 @@ function dashboardLiveRows(stage) {
   return drivers.map(driver => {
     const live = telemetryFor(driver);
     const state = driverTrackState(driver);
-    return `<button type="button" class="dash-live-row" data-driver="${escapeHtml(driver.id)}">
-      <span class="track-indicator track-${state}">#${escapeHtml(driver.number || '')}</span>
-      <span class="dash-driver">${escapeHtml(driver.name)}</span>
+    return `<button class="dash-live-row" data-driver="${driver.id}">
+      <span class="track-indicator track-${state}">#${driver.number || ''}</span>
+      <span class="dash-driver">${driver.name}</span>
       <span class="dash-live-state">${dashboardTrackLabel(driver)}</span>
       <span class="dash-speed">${formatTelemetryNumber(live?.speed, { decimals: 0, suffix: ' km/h', min: 0 })}</span>
       <span class="dash-km">${formatTelemetryNumber(live?.kms, { decimals: 1, suffix: ' km', min: 0 })}</span>
@@ -823,15 +844,17 @@ function dashboardSundayRows() {
   const leader = classified[0]?.totalTimeMs;
   if (!classified.length) return '<p class="dash-empty">Super Sunday aegu veel ei ole.</p>';
   return classified.map((driver, index) => `
-    <button type="button" class="dash-result-row compact" data-driver="${escapeHtml(driver.id)}">
+    <button class="dash-result-row compact" data-driver="${driver.id}">
       <span class="dash-pos">${index + 1}</span>
-      <span class="dash-driver">${escapeHtml(driver.name)}</span>
+      <span class="dash-driver">${driver.name}</span>
       <span class="dash-time">${index === 0 ? formatTimeMs(driver.totalTimeMs) : formatDeltaMs(driver.totalTimeMs - leader)}</span>
     </button>`).join('');
 }
 
 function renderDashboardSplit(stage) {
-  const drivers = sortDriversByStartOrder(dashboardFocusDrivers(stage.drivers));
+  const drivers = dashboardFocusDrivers(stage.drivers)
+    .slice()
+    .sort((a, b) => (a.order ?? 999) - (b.order ?? 999) || Number(a.number || 999) - Number(b.number || 999));
   const reference = drivers.find(driver => driver.id === referenceId) || drivers[0];
   if (!reference || !drivers.length) return '<p class="dash-empty">Splitiaegu veel ei ole.</p>';
 
@@ -844,7 +867,7 @@ function renderDashboardSplit(stage) {
   visibleDrivers.forEach((driver, index) => {
     const selected = driver.id === reference.id;
     const state = driverTrackState(driver);
-    html += `<button type="button" class="dash-split-driver ${selected ? 'selected' : ''}" data-driver="${escapeHtml(driver.id)}"><span class="track-indicator track-${state}">${index + 1}</span><strong>${escapeHtml(driver.name)}</strong></button>`;
+    html += `<button class="dash-split-driver ${selected ? 'selected' : ''}" data-driver="${driver.id}"><span class="track-indicator track-${state}">${index + 1}</span><strong>${driver.name}</strong></button>`;
     driver.splits.forEach((splitMs, splitIndex) => {
       const refMs = reference.splits[splitIndex];
       const difference = Number.isFinite(splitMs) && Number.isFinite(refMs) ? splitMs - refMs : null;
@@ -877,129 +900,25 @@ function restoreDashboardScrollState(state) {
   if (Number.isFinite(state.windowY)) window.scrollTo(0, state.windowY);
 }
 
-function dashboardPixelSizes(grid) {
-  const columns = [
-    grid.querySelector('.dash-splits')?.getBoundingClientRect().width || 0,
-    grid.querySelector('.dash-stage')?.getBoundingClientRect().width || 0,
-    grid.querySelector('.dash-overall')?.getBoundingClientRect().width || 0
-  ];
-  const rows = [
-    grid.querySelector('.dash-stage')?.getBoundingClientRect().height || 0,
-    grid.querySelector('.dash-live')?.getBoundingClientRect().height || 0
-  ];
-  return { columns, rows };
-}
-
-function clamp(value, minimum, maximum) {
-  return Math.min(maximum, Math.max(minimum, value));
-}
-
-function updateDashboardLayout(grid, type, delta, baseSizes = dashboardPixelSizes(grid)) {
-  const columns = [...baseSizes.columns];
-  const rows = [...baseSizes.rows];
-  if (type === 'col-1') {
-    const pair = columns[0] + columns[1];
-    columns[0] = clamp(columns[0] + delta, 300, pair - 170);
-    columns[1] = pair - columns[0];
-  } else if (type === 'col-2') {
-    const pair = columns[1] + columns[2];
-    columns[1] = clamp(columns[1] + delta, 170, pair - 180);
-    columns[2] = pair - columns[1];
-  } else if (type === 'row') {
-    const pair = rows[0] + rows[1];
-    rows[0] = clamp(rows[0] + delta, 100, pair - 100);
-    rows[1] = pair - rows[0];
-  }
-
-  if (columns.every(value => value > 0)) dashboardLayout.columns = columns;
-  if (rows.every(value => value > 0)) dashboardLayout.rows = rows;
-  applyDashboardLayout(grid);
-}
-
-function startDashboardResize(event) {
-  if (event.pointerType === 'mouse' && event.button !== 0) return;
-  const handle = event.currentTarget;
-  const grid = handle.closest('.dashboard-grid');
-  if (!grid) return;
-
-  const type = handle.dataset.resizer;
-  const startX = event.clientX;
-  const startY = event.clientY;
-  const startingLayout = dashboardPixelSizes(grid);
-  dashboardResizing = true;
-  document.body.classList.add('is-resizing-dashboard');
-  document.body.classList.toggle('is-resizing-dashboard-row', type === 'row');
-  handle.setPointerCapture?.(event.pointerId);
-
-  const move = moveEvent => {
-    const horizontal = type === 'row' ? 0 : moveEvent.clientX - startX;
-    const vertical = type === 'row' ? moveEvent.clientY - startY : 0;
-    updateDashboardLayout(grid, type, type === 'row' ? vertical : horizontal, startingLayout);
-  };
-
-  const finish = () => {
-    handle.removeEventListener('pointermove', move);
-    handle.removeEventListener('pointerup', finish);
-    handle.removeEventListener('pointercancel', finish);
-    handle.removeEventListener('lostpointercapture', finish);
-    document.body.classList.remove('is-resizing-dashboard');
-    document.body.classList.remove('is-resizing-dashboard-row');
-    dashboardResizing = false;
-    saveDashboardLayout();
-    if (dashboardRenderPending) {
-      dashboardRenderPending = false;
-      render();
-    }
-  };
-
-  handle.addEventListener('pointermove', move);
-  handle.addEventListener('pointerup', finish);
-  handle.addEventListener('pointercancel', finish);
-  handle.addEventListener('lostpointercapture', finish);
-  event.preventDefault();
-}
-
-function initializeDashboardResizers(grid) {
-  applyDashboardLayout(grid);
-  grid.querySelectorAll('[data-resizer]').forEach(handle => {
-    handle.addEventListener('pointerdown', startDashboardResize);
-    handle.addEventListener('dblclick', resetDashboardLayout);
-    handle.addEventListener('keydown', event => {
-      const type = handle.dataset.resizer;
-      const direction = type === 'row'
-        ? ({ ArrowUp: -12, ArrowDown: 12 }[event.key])
-        : ({ ArrowLeft: -12, ArrowRight: 12 }[event.key]);
-      if (!direction) return;
-      event.preventDefault();
-      updateDashboardLayout(grid, type, direction);
-      saveDashboardLayout();
-    });
-  });
-}
-
 function renderDashboardView(stage) {
   const scrollState = captureDashboardScrollState();
-  const focusDescription = dashboardFocus ? `${escapeHtml(dashboardFocusLabel())} · ` : '';
   $('#content').innerHTML = `
     <section class="dashboard-view">
       <div class="dashboard-grid">
         <section class="dash-panel dash-splits">
-          <div class="dash-panel-head"><h2>SPLITID</h2><span>${focusDescription}stardijärjekord · kliki sõitjal võrdluseks</span></div>
+          <div class="dash-panel-head"><h2>SPLITID</h2><span>${dashboardFocus ? dashboardFocusLabel() + ' · ' : ''}stardijärjekord · kliki sõitjal võrdluseks</span></div>
           <div class="dash-panel-body split-body">${renderDashboardSplit(stage)}</div>
         </section>
-        <div class="dash-resizer dash-resizer-column dash-resizer-column-1" data-resizer="col-1" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Muuda SPLITID ploki laiust" title="Lohista laiuse muutmiseks · topeltklõps taastab paigutuse"></div>
         <section class="dash-panel dash-stage">
           <div class="dash-panel-head"><h2>KATSE</h2><span>kõik</span></div>
           <div class="dash-panel-body">${dashboardStageRows(stage)}</div>
         </section>
-        <div class="dash-resizer dash-resizer-column dash-resizer-column-2" data-resizer="col-2" role="separator" tabindex="0" aria-orientation="vertical" aria-label="Muuda KATSE ja ÜLDSEIS plokkide laiust" title="Lohista laiuse muutmiseks · topeltklõps taastab paigutuse"></div>
         <section class="dash-panel dash-overall">
           <div class="dash-panel-head"><h2>ÜLDSEIS</h2><span>kõik</span></div>
           <div class="dash-panel-body">${dashboardOverallRows(stage)}</div>
         </section>
-        <div class="dash-resizer dash-resizer-row" data-resizer="row" role="separator" tabindex="0" aria-orientation="horizontal" aria-label="Muuda ülemiste ja alumiste plokkide kõrgust" title="Lohista kõrguse muutmiseks · topeltklõps taastab paigutuse"></div>
         <section class="dash-panel dash-live">
-          <div class="dash-panel-head"><h2>LIVE</h2><span>${focusDescription}staatus · kiirus · km</span></div>
+          <div class="dash-panel-head"><h2>LIVE</h2><span>${dashboardFocus ? dashboardFocusLabel() + ' · ' : ''}staatus · kiirus · km</span></div>
           <div class="dash-panel-body">${dashboardLiveRows(stage)}</div>
         </section>
         <section class="dash-panel dash-sunday">
@@ -1008,15 +927,10 @@ function renderDashboardView(stage) {
         </section>
       </div>
     </section>`;
-  initializeDashboardResizers($('.dashboard-grid'));
   restoreDashboardScrollState(scrollState);
 }
 
 function render() {
-  if (dashboardResizing) {
-    dashboardRenderPending = true;
-    return;
-  }
   renderTabs();
   renderCategorySelect();
   const stage = stages[stageIndex];
@@ -1088,12 +1002,52 @@ if (focusToggle) {
   };
 }
 
-$('.version').textContent = APP_VERSION;
+
 $('#prev').onclick = () => changeStage(-1);
 $('#next').onclick = () => changeStage(1);
 $('#refresh').onclick = () => refresh(false);
-render();
-refresh(true);
+
+async function rediscoverIfNeeded() {
+  if (params.get('event') && params.get('rally')) return;
+  const oldEvent = config.eventId;
+  const oldRally = config.rallyId;
+  // sunnime discovery cache'i uuesti kontrollima
+  localStorage.removeItem(DISCOVERY_CACHE_KEY);
+  config = { eventId: null, rallyId: null, eventName: null };
+  try {
+    await discoverActiveConfig();
+    if (config.eventId !== oldEvent || config.rallyId !== oldRally) {
+      stages = [];
+      entries = new Map();
+      previousOverallCache.clear();
+      previousOverallSnapshot = [];
+      sundayResults = [];
+      sundayStageIds = [];
+      stageIndex = 0;
+      referenceId = null;
+      await refresh(true);
+    }
+  } catch (error) {
+    console.warn('Ralli automaatkontroll ebaõnnestus:', error);
+    config = { eventId: oldEvent, rallyId: oldRally, eventName: config.eventName || 'WRC Rally' };
+  }
+}
+
+async function bootstrap() {
+  render();
+  setStatus('Otsin aktiivset rallit…', 'loading');
+  try {
+    await discoverActiveConfig();
+    await refresh(true);
+  } catch (error) {
+    console.error(error);
+    setStatus('Ralli leidmine ebaõnnestus', 'error');
+    $('#content').innerHTML = `<p class="empty">${error.message || 'Aktiivset WRC rallit ei leitud.'}</p>`;
+    renderTabs();
+  }
+}
+
+bootstrap();
 setInterval(() => refresh(false), 10000);
 setInterval(async () => {
   await loadTelemetry();
@@ -1104,6 +1058,7 @@ setInterval(() => {
     $('#stageSub').innerHTML = stageTimingText(stages[stageIndex]);
   }
 }, 1000);
+setInterval(rediscoverIfNeeded, 60 * 60 * 1000);
 document.addEventListener('visibilitychange', () => {
   if (!document.hidden) refresh(false);
 });
